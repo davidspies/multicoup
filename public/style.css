@@ -196,3 +196,4 @@ table.votegrid th, table.votegrid td { border: 1px solid var(--line); padding: 4
 table.votegrid td.oncrew { background: var(--bg); }
 .home .row button small { font-weight: 400; opacity: .8; }
 .badge2.scan { border-color: var(--nav); color: var(--nav); font-weight: 700; }
+button.copy-cmd { margin: 6px 0 4px; }

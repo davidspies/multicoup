@@ -282,20 +282,33 @@ function renderLobby() {
   const spectator = isHost
     ? `<p class="muted">A spectator sees only public information and commentates in its own session. This prompt includes the room's narrator key, so it can also pause the game, make it wait at each decision, and see a full private recap after each game. Only share it with your narrator. Paste it into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
     <pre class="cmd">Watch my ${esc(st.title)} game and narrate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}  Narrator key: ${esc(st.narratorKey)}
-Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre>`
+Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre><button class="small primary copy-cmd">Copy prompt</button>`
     : `<p class="muted">A spectator sees only public information and commentates in its own session. (The host's version of this prompt also lets it pause the game.) Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
     <pre class="cmd">Watch my ${esc(st.title)} game and commentate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
-Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre>`;
+Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre><button class="small primary copy-cmd">Copy prompt</button>`;
   html += `<details${openDetails.has('player') ? ' open' : ''} data-key="player"><summary>Add a Claude Code player</summary>
     <p class="muted">Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
     <pre class="cmd">Join my ${esc(st.title)} game and play until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
-Read ${esc(origin)}/PLAYING_AS_CLAUDE.md and follow it.</pre></details>
+Read ${esc(origin)}/PLAYING_AS_CLAUDE.md and follow it.</pre><button class="small primary copy-cmd">Copy prompt</button></details>
     <details${openDetails.has('spectator') ? ' open' : ''} data-key="spectator"><summary>Add a Claude Code spectator</summary>${spectator}</details>`;
   $('lobby').innerHTML = html;
   $('lobby').querySelectorAll('details[data-key]').forEach((d) => {
     d.ontoggle = () => (d.open ? openDetails.add(d.dataset.key) : openDetails.delete(d.dataset.key));
   });
   R.bindSettings(ui, $('lobby'));
+  // Selecting text in a box is fiddly on a phone, so each prompt gets a copy button.
+  $('lobby').querySelectorAll('.copy-cmd').forEach((b) => {
+    b.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(b.previousElementSibling.textContent);
+      } catch (e) {
+        alert(`Couldn't copy: ${e.message}`);
+        return;
+      }
+      b.textContent = 'Copied!';
+      setTimeout(() => (b.textContent = 'Copy prompt'), 1500);
+    };
+  });
   $('nar-pause')?.addEventListener('click', () => narrate('', { paused: !st.narrator.paused }));
   $('nar-step')?.addEventListener('click', () => narrate('', { stepMode: !st.narrator.stepMode }));
   $('nar-advance')?.addEventListener('click', () => narrate('/advance', {}));
