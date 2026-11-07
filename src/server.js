@@ -92,15 +92,15 @@ async function route(lobby, req, res) {
 
   if (req.method === 'GET' && op === 'state') {
     auth(req, room);
-    const since = url.searchParams.get('since');
-    if (since !== null) {
-      const sinceN = Number(since);
-      const wait = Number(url.searchParams.get('wait') ?? config.longPollMaxSec);
-      if (!Number.isInteger(sinceN) || !(wait >= 0)) throw new HttpError(400, 'since and wait must be numbers');
-      await room.waitForChange(sinceN, Math.min(wait, config.longPollMaxSec) * 1000);
-    }
+    await longPoll(url, room);
     // The member may have been kicked while we waited.
     return send(res, 200, room.view(auth(req, room).id));
+  }
+
+  // Spectator feed: public information only, no token needed.
+  if (req.method === 'GET' && op === 'watch') {
+    await longPoll(url, room);
+    return send(res, 200, room.publicView());
   }
 
   if (req.method !== 'POST') throw new HttpError(405, 'method not allowed');
@@ -129,6 +129,16 @@ async function route(lobby, req, res) {
       throw new HttpError(404, 'unknown endpoint');
   }
   return send(res, 200, room.view(me.id));
+}
+
+// With ?since=V, wait until the room's version passes V (capped at longPollMaxSec).
+async function longPoll(url, room) {
+  const since = url.searchParams.get('since');
+  if (since === null) return;
+  const sinceN = Number(since);
+  const wait = Number(url.searchParams.get('wait') ?? config.longPollMaxSec);
+  if (!Number.isInteger(sinceN) || !(wait >= 0)) throw new HttpError(400, 'since and wait must be numbers');
+  await room.waitForChange(sinceN, Math.min(wait, config.longPollMaxSec) * 1000);
 }
 
 async function serveStatic(pathname, res) {

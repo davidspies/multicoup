@@ -50,5 +50,22 @@ Every room endpoint except `join` takes `Authorization: Bearer <token>`.
 | `POST /api/rooms/:code/chat` | `{text}` | view |
 | `POST /api/rooms/:code/kick` | `{playerId}` | view (host only) |
 | `POST /api/rooms/:code/leave` | | `{ok}` |
+| `GET /api/rooms/:code/watch[?since=V&wait=S]` | | public view, **no token needed** (see below) |
 
 Each view includes `legal`, the exact list of moves you may make right now, each with a human-readable `label`.
+
+## Watching a room from a program
+`GET /api/rooms/:code/watch` returns what anyone at the table could see, with no token: seats and scoreboard, coins, influence counts, revealed cards, whose turn it is, the pending action/claim/block, who the game is waiting on, the game log, chat and past results. It never includes anyone's hand, cards drawn during an Exchange, or tokens. Anyone who knows the room code can watch.
+
+To follow a game live, loop on long-polls:
+
+```bash
+V=-1
+while :; do
+  S=$(curl -s "https://multicoup.onrender.com/api/rooms/ABCD/watch?since=$V&wait=30")
+  V=$(echo "$S" | jq .version)
+  echo "$S" | jq -r '.game.log[-1] // "no game yet"'
+done
+```
+
+Each response's `version` goes in the next request's `since`. The request returns as soon as anything changes, or after `wait` seconds (30 at most) with the same version.

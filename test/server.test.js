@@ -52,6 +52,8 @@ test('full multi-game match over HTTP with random players', async () => {
       if (g.phase === 'over') break;
       // Other players never see someone else's hand.
       for (const v of views) for (const p of v.data.game.players) if (p.id !== v.data.you) assert.equal(p.hand, undefined);
+      const pub = await call('GET', `/api/rooms/${code}/watch`);
+      assertPublic(pub.data, seats);
       const i = views.findIndex((v) => v.data.legal.length);
       const legal = views[i].data.legal;
       const { label, ...move } = legal[Math.floor(Math.random() * legal.length)];
@@ -62,6 +64,28 @@ test('full multi-game match over HTTP with random players', async () => {
   const st = (await call('GET', `/api/rooms/${code}/state`, undefined, host.token)).data;
   assert.equal(st.results.length, 3);
   assert.equal(st.members.reduce((a, m) => a + m.wins, 0), 3);
+});
+
+function assertPublic(view, seats) {
+  const text = JSON.stringify(view);
+  for (const s of seats) assert.ok(!text.includes(s.token), 'token leaked');
+  assert.ok(!('legal' in view) && !('you' in view));
+  for (const p of view.game?.players ?? []) assert.ok(!('hand' in p), 'hand leaked');
+  if (view.game) assert.equal(view.game.drawn, null);
+}
+
+test('watch: spectator feed needs no token, long-polls, and hides private info', async () => {
+  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
+  let w = await call('GET', `/api/rooms/${a.code}/watch`);
+  assert.equal(w.status, 200);
+  const pending = call('GET', `/api/rooms/${a.code}/watch?since=${w.data.version}&wait=10`);
+  await new Promise((r) => setTimeout(r, 100));
+  await call('POST', `/api/rooms/${a.code}/start`, {}, a.token);
+  w = await pending;
+  assert.equal(w.data.game.phase, 'action');
+  assertPublic(w.data, [a, b]);
+  assert.equal((await call('GET', '/api/rooms/ZZZZ/watch')).status, 404);
 });
 
 test('long poll returns on change', async () => {

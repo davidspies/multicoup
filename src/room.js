@@ -222,6 +222,12 @@ export class Room {
     });
   }
 
+  // What anyone at the table can see: no hands, no drawn cards, no tokens.
+  publicView() {
+    const { you, legal, canStart, ...rest } = this.view(null);
+    return rest;
+  }
+
   view(id) {
     const g = this.game;
     const legal = g && this.gamePlayerIds.includes(id) ? g.legalMoves(id).map((m) => ({ ...m, label: g.describeMove(id, m) })) : [];
