@@ -140,3 +140,62 @@ test('CLI: create, join, start, wait, act', async () => {
     await rm(d2, { recursive: true });
   }
 });
+
+test('narrator: key only for host; pause and step mode gate players', async () => {
+  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
+  const R = `/api/rooms/${a.code}`;
+  const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
+  assert.ok(key);
+  assert.equal((await call('GET', `${R}/state`, undefined, b.token)).data.narratorKey, null);
+  assert.ok(!JSON.stringify((await call('GET', `${R}/watch`)).data).includes(key));
+  assert.equal((await call('POST', `${R}/narrator`, { paused: true }, b.token)).status, 403);
+  assert.equal((await call('POST', `${R}/narrator`, { paused: true }, 'nope')).status, 403);
+
+  // Pause: no legal moves, acting is refused.
+  let st = (await call('POST', `${R}/start`, {}, a.token)).data;
+  const mover = st.game.turn === a.playerId ? a : b;
+  const other = mover === a ? b : a;
+  assert.equal((await call('POST', `${R}/narrator`, { paused: true }, key)).data.narrator.paused, true);
+  st = (await call('GET', `${R}/state`, undefined, mover.token)).data;
+  assert.deepEqual(st.legal, []);
+  const income = { move: { type: 'action', action: 'income' } };
+  assert.equal((await call('POST', `${R}/act`, income, mover.token)).status, 409);
+  await call('POST', `${R}/narrator`, { paused: false }, key);
+
+  // Step mode holds immediately, then after each new situation.
+  st = (await call('POST', `${R}/narrator`, { stepMode: true }, key)).data;
+  assert.equal(st.narrator.held, true);
+  assert.equal((await call('POST', `${R}/act`, income, mover.token)).status, 409);
+  await call('POST', `${R}/narrator/advance`, {}, key);
+  assert.equal((await call('POST', `${R}/act`, income, mover.token)).status, 200);
+  st = (await call('GET', `${R}/watch`)).data;
+  assert.equal(st.narrator.held, true);
+  assert.equal((await call('POST', `${R}/act`, income, other.token)).status, 409);
+  // The host can also advance (so a vanished narrator can't strand the game).
+  await call('POST', `${R}/narrator/advance`, {}, a.token);
+  assert.equal((await call('POST', `${R}/act`, income, other.token)).status, 200);
+  assert.equal((await call('POST', `${R}/narrator`, { stepMode: false }, a.token)).data.narrator.held, false);
+  assert.equal((await call('POST', `${R}/narrator/advance`, {}, key)).status, 409);
+});
+
+test('narrator: step mode stops the auto-pass timer while held', async () => {
+  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
+  const R = `/api/rooms/${a.code}`;
+  const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
+  await call('POST', `${R}/settings`, { settings: { responseTimeoutSec: 1 } }, a.token);
+  let st = (await call('POST', `${R}/start`, {}, a.token)).data;
+  const mover = st.game.turn === a.playerId ? a : b;
+  await call('POST', `${R}/narrator`, { stepMode: true }, key);
+  await call('POST', `${R}/narrator/advance`, {}, key);
+  await call('POST', `${R}/act`, { move: { type: 'action', action: 'tax' } }, mover.token);
+  st = (await call('GET', `${R}/watch`)).data;
+  assert.equal(st.game.phase, 'challenge');
+  assert.equal(st.narrator.held, true);
+  assert.equal(st.responseDeadline, null);
+  await new Promise((r) => setTimeout(r, 1300));
+  assert.equal((await call('GET', `${R}/watch`)).data.game.phase, 'challenge');
+  st = (await call('POST', `${R}/narrator/advance`, {}, key)).data;
+  assert.ok(st.responseDeadline);
+});

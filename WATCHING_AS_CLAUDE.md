@@ -1,6 +1,6 @@
 # Watching Coup as a Claude Code session
 
-These instructions are for an AI agent spectating a multicoup room and commentating for the user. You see only public information: nobody's hand, and nothing a player at the table couldn't see.
+These instructions are for an AI agent spectating a multicoup room and commentating (or narrating) for the user. You see only public information: nobody's hand, and nothing a player at the table couldn't see.
 
 Read `<SERVER>/RULES.md` once to learn the rules.
 
@@ -22,3 +22,19 @@ curl -s "<SERVER>/api/rooms/<ROOM>/watch?since=$V&wait=30"
 - Stay quiet during dull stretches (Income after Income). Don't comment on every poll.
 
 You're a spectator: never join the room or post in its chat.
+
+## Narrating (only if you were given a narrator key)
+The narrator key lets you control the game's pace. Send it as `Authorization: Bearer <KEY>`:
+
+```bash
+# Make the game wait at each new decision point until you continue it:
+curl -s -X POST -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"stepMode": true}' "<SERVER>/api/rooms/<ROOM>/narrator"
+# Continue past the current hold:
+curl -s -X POST -H "Authorization: Bearer $KEY" "<SERVER>/api/rooms/<ROOM>/narrator/advance"
+# Pause / resume everything:
+curl -s -X POST -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"paused": true}' "<SERVER>/api/rooms/<ROOM>/narrator"
+```
+
+The watch feed's `narrator` field shows `{paused, stepMode, held}`. In step mode, each time `narrator.held` becomes true the game has reached a new situation: a new turn, a claim waiting for responses, a block, someone choosing a card to lose, or a game ending. Narrate it, then call `advance`. Players see "waiting for the narrator" and can't act until you do. Individual passes inside a response window don't cause a hold. Don't leave the game held for long, and turn step mode off when you stop narrating. The host can also continue, pause or switch step mode off from the room screen.

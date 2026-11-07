@@ -68,6 +68,14 @@ function auth(req, room) {
   return room.byToken(h.slice(7));
 }
 
+function narratorAuth(req, room) {
+  const h = req.headers.authorization;
+  if (!h || !h.startsWith('Bearer ')) throw new HttpError(401, 'missing Authorization: Bearer <narrator key>');
+  const token = h.slice(7);
+  if (token === room.narratorKey) return;
+  room.requireHost(room.byToken(token).id);
+}
+
 async function route(lobby, req, res) {
   const url = new URL(req.url, 'http://x');
   const parts = url.pathname.split('/').filter(Boolean);
@@ -96,6 +104,16 @@ async function route(lobby, req, res) {
     await longPoll(url, room);
     // The member may have been kicked while we waited.
     return send(res, 200, room.view(auth(req, room).id));
+  }
+
+  // Narrator controls: the room's narrator key, or the host's own token.
+  if (req.method === 'POST' && op === 'narrator') {
+    narratorAuth(req, room);
+    const body = await readJson(req);
+    if (parts[4] === 'advance') room.advance();
+    else if (parts.length === 4) room.setNarration(body);
+    else throw new HttpError(404, 'unknown endpoint');
+    return send(res, 200, room.publicView());
   }
 
   // Spectator feed: public information only, no token needed.

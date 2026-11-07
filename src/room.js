@@ -34,6 +34,58 @@ export class Room {
     this.nextTimer = null;
     this.nextAt = null;
     this.touched = Date.now();
+    // Narrator controls. The key is shown only to the host, who hands it to a narrator.
+    this.narratorKey = randomBytes(18).toString('base64url');
+    this.paused = false;
+    this.stepMode = false;
+    this.held = false; // step mode: holding at a new situation until the narrator advances
+    this.holdKey = null;
+  }
+
+  gated() {
+    return this.paused || this.held;
+  }
+
+  situationKey() {
+    const g = this.game;
+    return g && `${this.gameNumber}:${g.turnNumber}:${g.phase}:${g.windowSeq}:${g.lossQueue[0]?.id ?? ''}`;
+  }
+
+  // In step mode, hold whenever the game reaches a new situation (not on every single pass).
+  maybeHold() {
+    if (!this.stepMode || !this.game) return;
+    const key = this.situationKey();
+    if (key !== this.holdKey) {
+      this.holdKey = key;
+      this.held = true;
+    }
+  }
+
+  setNarration(patch) {
+    if (!patch || typeof patch !== 'object') throw new HttpError(400, 'body must be an object');
+    for (const [k, v] of Object.entries(patch)) {
+      if (!['paused', 'stepMode'].includes(k)) throw new HttpError(400, `unknown narrator setting ${k}`);
+      if (typeof v !== 'boolean') throw new HttpError(400, `${k} must be true or false`);
+    }
+    if ('paused' in patch && patch.paused !== this.paused) {
+      this.paused = patch.paused;
+      this.system(this.paused ? 'The narrator paused the game.' : 'The narrator resumed the game.');
+    }
+    if ('stepMode' in patch && patch.stepMode !== this.stepMode) {
+      this.stepMode = patch.stepMode;
+      this.held = false;
+      this.holdKey = null;
+      this.system(this.stepMode ? 'Step mode on: the game waits for the narrator at each new decision.' : 'Step mode off.');
+    }
+    this.afterGameChange();
+    this.changed();
+  }
+
+  advance() {
+    if (!this.held) throw new HttpError(409, 'the game is not waiting on the narrator');
+    this.held = false;
+    this.afterGameChange();
+    this.changed();
   }
 
   member(id) {
@@ -108,6 +160,7 @@ export class Room {
 
   act(id, move) {
     if (!this.game) throw new HttpError(409, 'no game has started');
+    if (this.gated()) throw new HttpError(409, 'the narrator is holding the game; wait for it to continue');
     try {
       this.game.apply(id, move);
     } catch (e) {
@@ -160,6 +213,13 @@ export class Room {
       this.results.push({ gameNumber: this.gameNumber, winner: g.winner, winnerName: g.player(g.winner).name });
       this.system(`${g.player(g.winner).name} won game ${this.gameNumber}.`);
     }
+    this.maybeHold();
+    if (this.gated()) {
+      // Nothing may time out while the narrator holds the game.
+      this.clearWindowTimer();
+      this.clearNextTimer();
+      return;
+    }
     const inWindow = g.phase === 'challenge' || g.phase === 'block';
     if (!inWindow || !this.settings.responseTimeoutSec) {
       this.clearWindowTimer();
@@ -183,7 +243,7 @@ export class Room {
       this.nextTimer = setTimeout(() => {
         this.nextTimer = null;
         this.nextAt = null;
-        if (!this.inProgress() && this.members.length >= 2) this.startGame();
+        if (!this.inProgress() && !this.gated() && this.members.length >= 2) this.startGame();
       }, ms);
     }
     if (this.nextTimer && (!this.settings.autoNextSec || this.members.length < 2)) this.clearNextTimer();
@@ -224,13 +284,14 @@ export class Room {
 
   // What anyone at the table can see: no hands, no drawn cards, no tokens.
   publicView() {
-    const { you, legal, canStart, ...rest } = this.view(null);
+    const { you, legal, canStart, narratorKey, ...rest } = this.view(null);
     return rest;
   }
 
   view(id) {
     const g = this.game;
-    const legal = g && this.gamePlayerIds.includes(id) ? g.legalMoves(id).map((m) => ({ ...m, label: g.describeMove(id, m) })) : [];
+    const isHost = id !== null && id === this.hostId;
+    const legal = g && !this.gated() && this.gamePlayerIds.includes(id) ? g.legalMoves(id).map((m) => ({ ...m, label: g.describeMove(id, m) })) : [];
     return {
       version: this.version,
       code: this.code,
@@ -248,7 +309,9 @@ export class Room {
       inProgress: this.inProgress(),
       game: g && g.view(this.gamePlayerIds.includes(id) ? id : null),
       legal,
-      canStart: id === this.hostId && !this.inProgress() && this.members.length >= 2,
+      canStart: isHost && !this.inProgress() && this.members.length >= 2,
+      narrator: { paused: this.paused, stepMode: this.stepMode, held: this.held },
+      narratorKey: isHost ? this.narratorKey : null,
       responseDeadline: this.deadline,
       nextGameAt: this.nextAt,
       results: this.results,

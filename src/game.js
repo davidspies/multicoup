@@ -342,7 +342,9 @@ export class Game {
         this.lossQueue.shift();
         continue;
       }
-      if (hidden.length === 1 || hidden.every((c) => c.role === hidden[0].role)) {
+      // Only a last card is revealed automatically. Two identical cards still need the
+      // player's own choice, or the instant reveal would show they hold a pair.
+      if (hidden.length === 1) {
         this.reveal(p, hidden[0], reason);
         this.lossQueue.shift();
         continue;

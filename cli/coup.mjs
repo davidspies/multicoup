@@ -129,6 +129,7 @@ function print(s, st, { full }) {
     lines.push(`You are ${s.name} (${st.you}). Seated: ${st.members.map((m) => m.name).join(', ')}.`);
   }
   lines.push(`Now: ${situation(st)}`);
+  if (st.narrator.paused || st.narrator.held) lines.push('(The narrator is holding the game. Your options will appear when it continues.)');
   if (st.responseDeadline && g && (g.phase === 'challenge' || g.phase === 'block'))
     lines.push(`(Auto-pass in ${Math.max(0, Math.round((st.responseDeadline - Date.now()) / 1000))}s.)`);
 

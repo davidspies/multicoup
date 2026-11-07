@@ -93,8 +93,11 @@ test('successful challenge on assassinate refunds coins', () => {
   g.apply('p1', { type: 'action', action: 'assassinate', target: 'p2' });
   assert.equal(g.player('p1').coins, 0);
   g.apply('p3', { type: 'challenge' });
-  // both duke -> auto reveal
   assert.equal(g.player('p1').coins, 3);
+  // A pair is never revealed automatically: that would give the pair away.
+  assert.equal(g.phase, 'lose');
+  assert.deepEqual(g.legalMoves('p1'), [{ type: 'lose', role: 'duke' }]);
+  g.apply('p1', { type: 'lose', role: 'duke' });
   assert.equal(g.player('p1').cards.filter((c) => c.revealed).length, 1);
   assert.equal(g.phase, 'action');
   assert.equal(g.turn, 1);

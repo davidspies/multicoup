@@ -28,6 +28,7 @@ let pendingAction = null; // action awaiting a target choice
 let activeTab = 'log';
 let seenChat = 0;
 let busy = false;
+const openDetails = new Set(); // lobby <details> that stay open across re-renders
 
 const storeKey = (code) => `multicoup:${code}`;
 
@@ -58,6 +59,15 @@ async function act(op, body) {
     alert(e.message);
   } finally {
     busy = false;
+  }
+}
+
+// Narrator endpoints answer with the public view; the long-poll picks up the change.
+async function narrate(path, body) {
+  try {
+    await roomApi('POST', `narrator${path}`, body);
+  } catch (e) {
+    alert(e.message);
   }
 }
 
@@ -212,7 +222,8 @@ function render(st) {
     deadline = ` · auto-pass in <span id="countdown" data-at="${st.responseDeadline}"></span>`;
   }
   $('banner').className = `banner${myMove ? ' urgent' : ''}`;
-  $('banner').innerHTML = `${esc(s.text)}${s.sub || deadline ? `<div class="sub">${esc(s.sub ?? '')}${deadline}</div>` : ''}`;
+  const hold = st.narrator.paused ? '⏸ Paused by the narrator. ' : st.narrator.held ? '⏸ Waiting for the narrator… ' : '';
+  $('banner').innerHTML = `${esc(s.text)}${s.sub || deadline || hold ? `<div class="sub"><b>${esc(hold)}</b>${esc(s.sub ?? '')}${deadline}</div>` : ''}`;
   tick();
 
   // Table (opponents)
@@ -335,16 +346,33 @@ function renderLobby() {
   } else {
     html += `<p class="muted">Auto-pass: ${st.settings.responseTimeoutSec ? `${st.settings.responseTimeoutSec}s` : 'off'} · Auto-start next game: ${st.settings.autoNextSec ? `${st.settings.autoNextSec}s` : 'off'}</p>`;
   }
+  if (isHost) {
+    const n = st.narrator;
+    html += `<div class="settings"><span class="muted">Narrator:</span>
+      <button class="small" id="nar-pause">${n.paused ? 'Resume' : 'Pause'}</button>
+      <button class="small" id="nar-step">Step mode: ${n.stepMode ? 'on' : 'off'}</button>
+      ${n.held ? '<button class="small primary" id="nar-advance">Continue</button>' : ''}</div>`;
+  }
   const origin = location.origin;
-  html += `<details><summary>Add a Claude Code player</summary>
+  const spectator = isHost
+    ? `<p class="muted">A spectator sees only public information and commentates in its own session. This prompt includes the room's narrator key, so it can also pause the game or make it wait at each decision. Only share it with your narrator. Paste it into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
+    <pre class="cmd">Watch my Coup game and narrate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}  Narrator key: ${esc(st.narratorKey)}
+Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre>`
+    : `<p class="muted">A spectator sees only public information and commentates in its own session. (The host's version of this prompt also lets it pause the game.) Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
+    <pre class="cmd">Watch my Coup game and commentate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
+Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre>`;
+  html += `<details${openDetails.has('player') ? ' open' : ''} data-key="player"><summary>Add a Claude Code player</summary>
     <p class="muted">Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
     <pre class="cmd">Join my Coup game and play until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
 Read ${esc(origin)}/PLAYING_AS_CLAUDE.md and follow it.</pre></details>
-    <details><summary>Add a Claude Code spectator</summary>
-    <p class="muted">A spectator sees only public information and commentates in its own session. Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
-    <pre class="cmd">Watch my Coup game and commentate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
-Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre></details>`;
+    <details${openDetails.has('spectator') ? ' open' : ''} data-key="spectator"><summary>Add a Claude Code spectator</summary>${spectator}</details>`;
   $('lobby').innerHTML = html;
+  $('lobby').querySelectorAll('details[data-key]').forEach((d) => {
+    d.ontoggle = () => (d.open ? openDetails.add(d.dataset.key) : openDetails.delete(d.dataset.key));
+  });
+  $('nar-pause')?.addEventListener('click', () => narrate('', { paused: !st.narrator.paused }));
+  $('nar-step')?.addEventListener('click', () => narrate('', { stepMode: !st.narrator.stepMode }));
+  $('nar-advance')?.addEventListener('click', () => narrate('/advance', {}));
   $('start')?.addEventListener('click', () => act('start', {}));
   $('save-settings')?.addEventListener('click', () =>
     act('settings', { settings: { responseTimeoutSec: Number($('set-timeout').value), autoNextSec: Number($('set-next').value) } }),

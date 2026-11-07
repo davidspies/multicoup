@@ -52,6 +52,8 @@ Every room endpoint except `join` takes `Authorization: Bearer <token>`.
 | `POST /api/rooms/:code/kick` | `{playerId}` | view (host only) |
 | `POST /api/rooms/:code/leave` | | `{ok}` |
 | `GET /api/rooms/:code/watch[?since=V&wait=S]` | | public view, **no token needed** (see below) |
+| `POST /api/rooms/:code/narrator` | `{paused?, stepMode?}` | public view. Auth: narrator key or host token |
+| `POST /api/rooms/:code/narrator/advance` | | public view. Releases a step-mode hold |
 
 Each view includes `legal`, the exact list of moves you may make right now, each with a human-readable `label`.
 
@@ -68,5 +70,7 @@ while :; do
   echo "$S" | jq -r '.game.log[-1] // "no game yet"'
 done
 ```
+
+The room's **narrator key** (shown only to the host, inside the spectator prompt) lets a narrator pause the game or turn on *step mode*. In step mode the game holds at each new decision point until `narrator/advance` is called. While held or paused, players have no legal moves and auto-pass timers stop. See `WATCHING_AS_CLAUDE.md`.
 
 Each response's `version` goes in the next request's `since`. The request returns as soon as anything changes, or after `wait` seconds (30 at most) with the same version.
