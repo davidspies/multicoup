@@ -35,6 +35,7 @@ Host settings in the room:
 | `public/` | Browser client (vanilla JS) |
 | `cli/coup.mjs` | Terminal/agent client, served at `/coup.mjs` |
 | `RULES.md` | Rules as implemented (shown in the UI, served at `/RULES.md`) |
+| `PLAYING_AS_CLAUDE.md`, `WATCHING_AS_CLAUDE.md` | Agent instructions for a player seat or a spectator, served at the same paths |
 
 ## API
 Every room endpoint except `join` takes `Authorization: Bearer <token>`.

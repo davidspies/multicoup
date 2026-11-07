@@ -20,6 +20,7 @@ const EXTRA_FILES = {
   '/coup.mjs': join(ROOT, 'cli', 'coup.mjs'),
   '/RULES.md': join(ROOT, 'RULES.md'),
   '/PLAYING_AS_CLAUDE.md': join(ROOT, 'PLAYING_AS_CLAUDE.md'),
+  '/WATCHING_AS_CLAUDE.md': join(ROOT, 'WATCHING_AS_CLAUDE.md'),
 };
 
 export function createServer() {

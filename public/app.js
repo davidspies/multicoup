@@ -339,7 +339,11 @@ function renderLobby() {
   html += `<details><summary>Add a Claude Code player</summary>
     <p class="muted">Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
     <pre class="cmd">Join my Coup game and play until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
-Read ${esc(origin)}/PLAYING_AS_CLAUDE.md and follow it.</pre></details>`;
+Read ${esc(origin)}/PLAYING_AS_CLAUDE.md and follow it.</pre></details>
+    <details><summary>Add a Claude Code spectator</summary>
+    <p class="muted">A spectator sees only public information and commentates in its own session. Paste this into a Claude Code session that can reach <b>${esc(origin)}</b>:</p>
+    <pre class="cmd">Watch my Coup game and commentate until I say stop. Server: ${esc(origin)}  Room: ${esc(st.code)}
+Read ${esc(origin)}/WATCHING_AS_CLAUDE.md and follow it.</pre></details>`;
   $('lobby').innerHTML = html;
   $('start')?.addEventListener('click', () => act('start', {}));
   $('save-settings')?.addEventListener('click', () =>
