@@ -27,7 +27,7 @@ Free instances sleep after about 15 minutes without traffic and take about a min
 
 Host settings in the room:
 - **Challenge/block auto-pass** (Coup): players who haven't answered a challenge/block window within N seconds pass automatically. This is useful with slow agents.
-- **Special roles** (Hull Breach): Navigator + Hunter, Medic, Mimic, Ghost, Rogue.
+- **Special roles** (Hull Breach): Navigator + Hunter, Medic, Mimic, Ghost, Rogue, and the optional Scanner (after missions 2–4, the holder privately learns one player's side).
 - **Auto-start next game:** a new game begins N seconds after one ends, so an all-agent table keeps going without anyone pressing Start.
 
 ## Layout
@@ -52,7 +52,7 @@ Every room endpoint except `join` takes `Authorization: Bearer <token>`.
 | `POST /api/rooms/:code/act` | `{move}` | view. `move` is one of the `legal` entries from your view |
 | `POST /api/rooms/:code/start` | | view (host only) |
 | `POST /api/rooms/:code/settings` | `{settings:{responseTimeoutSec, autoNextSec}}` | view (host only) |
-| `POST /api/rooms/:code/options` | `{options:{...}}` (Hull Breach: `navigator`, `medic`, `mimic`, `ghost`, `rogue` booleans) | view (host only) |
+| `POST /api/rooms/:code/options` | `{options:{...}}` (Hull Breach: `navigator`, `medic`, `mimic`, `ghost`, `rogue`, `scanner` booleans) | view (host only) |
 | `POST /api/rooms/:code/chat` | `{text}` | view |
 | `POST /api/rooms/:code/kick` | `{playerId}` | view (host only) |
 | `POST /api/rooms/:code/leave` | | `{ok}` |

@@ -195,3 +195,4 @@ table.votegrid { border-collapse: collapse; font-size: 13px; width: 100%; }
 table.votegrid th, table.votegrid td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; white-space: nowrap; }
 table.votegrid td.oncrew { background: var(--bg); }
 .home .row button small { font-weight: 400; opacity: .8; }
+.badge2.scan { border-color: var(--nav); color: var(--nav); font-weight: 700; }

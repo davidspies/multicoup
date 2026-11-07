@@ -19,6 +19,11 @@
 
 Plain saboteurs (and the Hunter, Mimic and Ghost) know each other, except the Rogue. Plain crew know nothing.
 
+## The Scanner (optional, host's choice)
+- The player seated just before the first captain starts holding the Scanner.
+- After missions 2, 3 and 4 (unless the game has already ended), the holder scans one player who has never held the Scanner. Only the holder sees that player's true side, loyal crew or saboteur. Every role is revealed honestly, including the Ghost and the Rogue.
+- The Scanner then passes to the scanned player. Everyone sees who scanned whom, but not the result. The holder may tell the table anything, true or not.
+
 ## A round
 1. **Propose:** the captain picks a crew of the required size for the current mission. They may include themselves.
 2. **Vote:** everyone votes **approve** or **reject** at once. Votes are revealed together. A strict majority approves; a tie rejects.

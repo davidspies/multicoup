@@ -21,7 +21,7 @@ const USAGE = `Usage: node multicoup.mjs <command>
   say <message...>                         Send a table-talk chat message
   start                                    (host) Start the next game
   settings key=value ...                   (host) responseTimeoutSec=N autoNextSec=N
-  options key=true|false ...               (host, Hull Breach) navigator medic mimic ghost rogue
+  options key=true|false ...               (host, Hull Breach) navigator medic mimic ghost rogue scanner
   kick <player-name>                       (host) Remove a player
   leave                                    Leave the room (forfeits/abandons a game in progress)
   rules                                    Print the rules of this room's game`;

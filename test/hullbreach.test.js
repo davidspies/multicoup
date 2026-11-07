@@ -155,7 +155,7 @@ test('random play always ends and never leaks roles early', () => {
   for (let seed = 1; seed <= 300; seed++) {
     const rng = seeded(seed * 104729);
     const n = 5 + (seed % 6);
-    const opts = { medic: seed % 2 === 0, mimic: seed % 3 === 0, ghost: n >= 7 && seed % 5 === 0, rogue: n >= 10 && seed % 7 === 0 };
+    const opts = { medic: seed % 2 === 0, mimic: seed % 3 === 0, ghost: n >= 7 && seed % 5 === 0, rogue: n >= 10 && seed % 7 === 0, scanner: seed % 4 < 2 };
     const g = newGame(n, opts, seed);
     let steps = 0;
     while (g.phase !== 'over') {
@@ -177,4 +177,44 @@ test('random play always ends and never leaks roles early', () => {
     }
     assert.ok(g.privateRecord().roles.length === n);
   }
+});
+
+test('scanner: used after missions 2-4, result private, passes on, no re-scanning past holders', () => {
+  const g = newGame(7, { scanner: true });
+  setRoles(g, ['crew', 'crew', 'crew', 'navigator', 'hunter', 'saboteur', 'saboteur']);
+  // First captain is seat 0, so the seat before (P7) starts with the Scanner.
+  assert.equal(g.scanHolder, 'p7');
+  runMission(g, ['p1', 'p2'], []);
+  assert.equal(g.phase, 'propose'); // no scan after mission 1
+  runMission(g, ['p1', 'p2', 'p6'], ['p6']);
+  assert.equal(g.phase, 'scan');
+  assert.deepEqual(g.awaiting(), ['p7']);
+  const targets = g.legalMoves('p7').map((m) => m.target);
+  assert.ok(!targets.includes('p7'));
+  g.apply('p7', { type: 'scan', target: 'p6' });
+  // Only the scanner sees the result.
+  assert.deepEqual(g.view('p7').you.scans, [{ target: 'p6', side: 'saboteurs' }]);
+  for (const p of g.players.filter((x) => x.id !== 'p7')) assert.deepEqual(g.view(p.id).you.scans, []);
+  assert.deepEqual(g.view(null).scans, [{ by: 'p7', target: 'p6', afterMission: 1 }]);
+  assert.ok(!JSON.stringify(g.view(null)).includes('"side"'), 'scan result leaked into public view');
+  assert.ok(g.textView('p7').some((l) => /Your scan: P6 is a saboteur/.test(l)));
+  assert.ok(!g.textView('p1').some((l) => /Your scan/.test(l)));
+  assert.equal(g.scanHolder, 'p6');
+  assert.equal(g.phase, 'propose');
+  assert.equal(g.mission, 2);
+  runMission(g, ['p1', 'p2', 'p3'], []);
+  assert.equal(g.phase, 'scan');
+  assert.deepEqual(g.awaiting(), ['p6']);
+  assert.throws(() => g.apply('p6', { type: 'scan', target: 'p7' }), /illegal/);
+  g.apply('p6', { type: 'scan', target: 'p1' });
+  assert.match(g.history.at(-2).note, /P1 is loyal crew/);
+});
+
+test('scanner off: no scan phase, nobody holds it', () => {
+  const g = newGame(7);
+  assert.equal(g.scanHolder, null);
+  setRoles(g, ['crew', 'crew', 'crew', 'navigator', 'hunter', 'saboteur', 'saboteur']);
+  runMission(g, ['p1', 'p2'], []);
+  runMission(g, ['p1', 'p2', 'p3'], []);
+  assert.equal(g.phase, 'propose');
 });

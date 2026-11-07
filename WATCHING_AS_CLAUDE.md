@@ -14,7 +14,7 @@ curl -s "<SERVER>/api/rooms/<ROOM>/watch?since=$V&wait=30"
 - Start with `V=-1`. After each response, set `V` to its `version` field. The request returns as soon as anything changes, or after 30 seconds with the same version (then just poll again).
 - Fields for both games: `situation` (one-line status), `text` (a readable summary of the table), `game.phase`, `game.awaiting` (who the game is waiting on), `game.log` (one line per event, for the current game), `chat`, `members` (wins/played per player), `results` (past games), `gameNumber`.
 - Coup: `game.players` (coins, `influence` left, `revealed` cards, `alive`), `game.turn`, `game.pending` (the action, its claim, any block).
-- Hull Breach: `game.missions` (size, result, sabotage count), `game.mission`, `game.attempt` (proposal number, 5 rejections in a row = saboteurs win), `game.leader` (captain), `game.team` (proposed crew), `game.proposals` (every vote so far: who proposed whom and how each player voted), `game.specialRoles`. Roles appear in `game.players[].role` only once the game is over.
+- Hull Breach: `game.missions` (size, result, sabotage count), `game.mission`, `game.attempt` (proposal number, 5 rejections in a row = saboteurs win), `game.leader` (captain), `game.team` (proposed crew), `game.proposals` (every vote so far: who proposed whom and how each player voted), `game.specialRoles`, `game.scanHolder` and `game.scans` (who scanned whom; results stay private). Roles appear in `game.players[].role` only once the game is over.
 - Remember how many `game.log` lines and which `chat` entries (by `seq`) you've already seen, so you only react to new ones. When `gameNumber` changes, a new game's log starts from the beginning.
 
 ## Coup: reading the log, challenges and replaced cards
@@ -61,7 +61,7 @@ curl -s -H "Authorization: Bearer $KEY" "<SERVER>/api/rooms/<ROOM>/reveal?game=3
 `events[i].text` always matches `game.log[i]` from the watch feed.
 
 - **Coup:** `{gameNumber, winner, startingHands: [{name, hand}], events: [{text, note, hands: {name: [roles]}}]}`. Notes mark every character claim (action or block) as `HONEST:` or `BLUFF:`, and say which replacement card a proven player drew and what an Exchange drew, kept and returned. Recap who bluffed what and when, which bluffs were called or got through, and which challenges were right or wrong.
-- **Hull Breach:** `{gameNumber, result, roles: [{name, role, side}], events: [{text, note}]}`. Notes on mission results say exactly who played sabotage. Recap who the saboteurs were, who sabotaged which mission, who voted suspiciously or cleverly, what the Navigator knew, and whether the Hunter's guess was sound.
+- **Hull Breach:** `{gameNumber, result, roles: [{name, role, side}], events: [{text, note}]}`. Notes on mission results say exactly who played sabotage, and notes on scans give the true result. Recap who the saboteurs were, who sabotaged which mission, who voted suspiciously or cleverly, what the Navigator knew, and whether the Hunter's guess was sound.
 
 When a game ends, fetch the record and give a short recap like that, plus the turning points. With step mode on, the game also holds at its end, so you can recap before calling `advance` to let the next game start. Never reveal private information before a game is over.
 

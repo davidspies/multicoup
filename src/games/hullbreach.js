@@ -41,8 +41,12 @@ export const ROLES = {
   },
 };
 
-// Host options: which special roles are in play. The Navigator always comes with the Hunter.
-export const OPTION_KEYS = ['navigator', 'medic', 'mimic', 'ghost', 'rogue'];
+// Host options: which special roles are in play (the Navigator always comes with the Hunter),
+// and whether the Scanner is used.
+export const OPTION_KEYS = ['navigator', 'medic', 'mimic', 'ghost', 'rogue', 'scanner'];
+// The Scanner is used after these missions (0-based: after missions 2, 3 and 4).
+const SCAN_AFTER = [1, 2, 3];
+const SIDE_NAME = { crew: 'loyal crew', saboteurs: 'a saboteur' };
 
 const isSab = (role) => ROLES[role].side === 'saboteurs';
 
@@ -57,7 +61,7 @@ export class Game {
   }
 
   static defaultOptions() {
-    return { navigator: true, medic: false, mimic: false, ghost: false, rogue: false };
+    return { navigator: true, medic: false, mimic: false, ghost: false, rogue: false, scanner: false };
   }
 
   static startIndex(players, lastWinnerIds, randInt) {
@@ -108,7 +112,12 @@ export class Game {
     this.hunted = null;
     this.log = [];
     this.history = [];
+    // Scanner: starts with the player seated just before the first captain.
+    this.scanHolder = opts.scanner ? this.players[(startIndex + players.length - 1) % players.length].id : null;
+    this.pastHolders = this.scanHolder ? [this.scanHolder] : [];
+    this.scans = []; // {by, target, afterMission, side}; side is private to `by`
     this.addLog(`Game started with ${players.length} players: ${TEAM_SPLIT[players.length][1]} of them are saboteurs.`);
+    if (this.scanHolder) this.addLog(`${this.name(this.scanHolder)} holds the Scanner.`);
     this.addLog(this.missionIntro());
   }
 
@@ -182,6 +191,8 @@ export class Game {
         return this.team.filter((id) => !this.cards.has(id));
       case 'hunt':
         return [this.hunter().id];
+      case 'scan':
+        return [this.scanHolder];
       case 'over':
         return [];
       default:
@@ -209,6 +220,8 @@ export class Game {
           : [{ type: 'mission', card: 'success' }];
       case 'hunt':
         return this.players.filter((p) => p.id !== pid).map((p) => ({ type: 'hunt', target: p.id }));
+      case 'scan':
+        return this.players.filter((p) => !this.pastHolders.includes(p.id)).map((p) => ({ type: 'scan', target: p.id }));
       default:
         throw new Error(`no moves in phase ${this.phase}`);
     }
@@ -224,6 +237,8 @@ export class Game {
         return m.card === 'success' ? 'Play SUCCESS' : 'Play SABOTAGE';
       case 'hunt':
         return `Name ${this.name(m.target)} as the Navigator`;
+      case 'scan':
+        return `Scan ${this.name(m.target)}`;
       default:
         throw new Error(`unknown move ${m.type}`);
     }
@@ -247,6 +262,8 @@ export class Game {
         return this.playCard(pid, norm.card);
       case 'hunt':
         return this.hunt(norm.target);
+      case 'scan':
+        return this.scan(norm.target);
       default:
         throw new Error('unreachable');
     }
@@ -312,11 +329,38 @@ export class Game {
       this.addLog(`The crew has completed three missions! ${h.name} reveals they are the Hunter and must name the Navigator.`);
       return;
     }
+    if (this.scanHolder && SCAN_AFTER.includes(this.mission)) {
+      this.phase = 'scan';
+      this.addLog(`${this.name(this.scanHolder)} must use the Scanner on someone who hasn't held it.`);
+      return;
+    }
+    this.startNextMission();
+  }
+
+  startNextMission() {
     this.mission++;
     this.attempt = 1;
     this.nextLeader();
     this.phase = 'propose';
     this.addLog(this.missionIntro());
+  }
+
+  scan(target) {
+    const by = this.scanHolder;
+    const side = ROLES[this.player(target).role].side;
+    this.scans.push({ by, target, afterMission: this.mission, side });
+    this.addLog(
+      `${this.name(by)} scans ${this.name(target)}. The Scanner passes to ${this.name(target)}.`,
+      `${this.name(target)} is ${SIDE_NAME[side]}.`,
+    );
+    this.scanHolder = target;
+    this.pastHolders.push(target);
+    this.startNextMission();
+  }
+
+  // Scan results the player can see: only their own scans.
+  scansBy(pid) {
+    return this.scans.filter((x) => x.by === pid).map((x) => ({ target: x.target, side: x.side }));
   }
 
   hunt(target) {
@@ -385,6 +429,11 @@ export class Game {
         return { text: `Mission ${this.mission + 1} is under way.`, sub: `Waiting on ${who} to play a card.` };
       case 'hunt':
         return { text: `${this.hunter().name} (Hunter) must name the Navigator.` };
+      case 'scan':
+        return {
+          text: this.scanHolder === pid ? 'You hold the Scanner: choose someone to scan. Only you will see their loyalty.' : `${this.name(this.scanHolder)} is choosing someone to scan.`,
+          sub: `Can't be scanned (held it before): ${this.pastHolders.map((id) => this.name(id)).join(', ')}.`,
+        };
       case 'over':
         return { text: this.winnerSide ? `🏆 ${this.resultText()}` : this.resultText() };
       default:
@@ -400,11 +449,16 @@ export class Game {
       lines.push(`You are ${me.name}, the ${r.name} (${r.side === 'crew' ? 'loyal crew' : 'SABOTEUR'}). ${r.blurb}`);
       const k = this.knowledgeText(pid);
       if (k) lines.push(`What you know: ${k}`);
+      for (const sc of this.scansBy(pid)) lines.push(`Your scan: ${this.name(sc.target)} is ${SIDE_NAME[sc.side]}.`);
     }
     lines.push(`Special roles in play: ${this.specialRoles().join(', ') || 'none'}.`);
     const s = this.score();
     lines.push(`Missions: ${this.missions.map((m, i) => `${i + 1}:${m.result === 'success' ? 'OK' : m.result === 'fail' ? `FAIL(${m.fails})` : `${m.size}${m.twoFails ? '*' : ''}`}`).join('  ')}   Score: crew ${s.crew}, saboteurs ${s.saboteurs}. (* needs 2 sabotage cards)`);
     lines.push(`Seats (clockwise): ${this.players.map((p) => `${p.name}${p.id === this.leaderId() && this.phase !== 'over' ? ' [captain]' : ''}${this.phase === 'over' ? ` (${ROLES[p.role].name})` : ''}`).join(', ')}`);
+    if (this.scanHolder) {
+      const past = this.scans.map((x) => `${this.name(x.by)} scanned ${this.name(x.target)} after mission ${x.afterMission + 1}`).join('; ');
+      lines.push(`Scanner: held by ${this.name(this.scanHolder)}.${past ? ` ${past}.` : ''}`);
+    }
     if (this.team) lines.push(`Proposed crew: ${this.team.map((id) => this.name(id)).join(', ')}.`);
     if (this.phase === 'vote') lines.push(`Votes in: ${this.votes.size}/${this.players.length}. Still to vote: ${this.awaiting().map((id) => this.name(id)).join(', ')}.`);
     if (this.proposals.length) {
@@ -421,7 +475,7 @@ export class Game {
 
   specialRoles() {
     const o = this.options;
-    return [o.navigator && 'Navigator', o.navigator && 'Hunter', o.medic && 'Medic', o.mimic && 'Mimic', o.ghost && 'Ghost', o.rogue && 'Rogue'].filter(Boolean);
+    return [o.navigator && 'Navigator', o.navigator && 'Hunter', o.medic && 'Medic', o.mimic && 'Mimic', o.ghost && 'Ghost', o.rogue && 'Rogue', o.scanner && 'Scanner'].filter(Boolean);
   }
 
   view(pid) {
@@ -444,6 +498,7 @@ export class Game {
         blurb: ROLES[me.role].blurb,
         knows: this.knowledge(pid),
         knowsText: this.knowledgeText(pid),
+        scans: this.scansBy(pid),
       },
       roleNames: Object.fromEntries(Object.entries(ROLES).map(([k, r]) => [k, r.name])),
       specialRoles: this.specialRoles(),
@@ -454,6 +509,9 @@ export class Game {
       leader: this.leaderId(),
       team: this.team,
       proposals: this.proposals,
+      scanHolder: this.scanHolder,
+      pastHolders: this.pastHolders,
+      scans: this.scans.map(({ by, target, afterMission }) => ({ by, target, afterMission })),
       hunter: this.phase === 'hunt' || over ? (this.hunter()?.id ?? null) : null,
       hunted: this.hunted,
       winnerSide: this.winnerSide,
@@ -490,6 +548,8 @@ function normalize(m) {
       return { type: 'mission', card: m.card };
     case 'hunt':
       return { type: 'hunt', target: m.target };
+    case 'scan':
+      return { type: 'scan', target: m.target };
     default:
       fail(`unknown move type ${m.type}`);
   }
