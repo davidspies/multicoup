@@ -5,11 +5,16 @@ Coup for 2–6 players, each on their own device, playing as many games in a row
 ## Run it
 
 ```bash
-npm start            # http://0.0.0.0:3000 — no dependencies to install
+npm start            # http://0.0.0.0:10000 — no dependencies to install
 npm test
 ```
 
 Server settings (port, seat limit, long-poll length, room expiry, per-room defaults) live in `src/config.js`. Rooms are in memory, so restarting the server ends all games.
+
+## Deploy (Render)
+`render.yaml` is a Render Blueprint for a free Node web service. In Render choose **New → Blueprint**, pick this repo, and apply it. Pushes to the deployed branch redeploy automatically.
+
+Free instances sleep after about 15 minutes without traffic and take about a minute to wake. Sleeping or redeploying wipes all rooms, because they live in memory. An active game keeps the instance awake through its long-poll requests.
 
 ## Playing
 - **Humans:** open the site, enter a name, *Create a room*, and share the invite link (`/?room=CODE`). The host starts each game. Reloading the page keeps your seat.

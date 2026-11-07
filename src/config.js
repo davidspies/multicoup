@@ -1,7 +1,7 @@
 // The single owner of every server setting. Change values here and commit.
 export const config = {
   host: '0.0.0.0',
-  port: 3000,
+  port: 10000, // Render's default PORT, so the host needs no port setting
   maxSeats: 6,
   // Longest a single long-poll request is held open.
   longPollMaxSec: 30,
