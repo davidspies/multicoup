@@ -24,7 +24,7 @@ You can claim any character whether or not you hold it. That's bluffing.
 
 ## Challenges
 When anyone claims a character (to act or to block), every other living player can **challenge** it. The first challenge counts.
-- **If the claimant has the card**, they reveal it, shuffle it into the deck and draw a replacement. The challenger loses an influence. The action or block goes ahead.
+- **If the claimant has the card**, they show it, shuffle it back into the court deck and draw a face-down replacement. The shown card is *not* lost, and they keep the same number of cards. The challenger loses an influence. The action or block goes ahead.
 - **If they don't**, the claimant loses an influence and the action or block fails. Coins paid for a failed Assassinate are returned.
 
 ## Blocks

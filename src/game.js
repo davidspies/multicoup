@@ -51,6 +51,9 @@ export class Game {
     this.ctx = null;
     this.lossQueue = [];
     this.log = [];
+    // Parallel to log: the private truth behind each public line, for the post-game reveal.
+    this.history = [];
+    this.startingHands = this.players.map((p) => ({ id: p.id, name: p.name, hand: p.cards.map((c) => c.role) }));
     this.winner = null;
     this.windowSeq = 0;
     this.addLog(`Game started. ${this.current().name} goes first.`);
@@ -61,8 +64,22 @@ export class Game {
     if (!this.deck.length) throw new Error('deck empty');
     return this.deck.pop();
   }
-  addLog(text) {
+  // note: private detail (bluffs, cards drawn) shown only in the post-game reveal.
+  addLog(text, note = null) {
     this.log.push(text);
+    this.history.push({
+      text,
+      note,
+      hands: Object.fromEntries(this.players.map((p) => [p.name, this.hidden(p).map((c) => c.role)])),
+    });
+  }
+
+  // Honest or bluff, judged against the claimant's hand at the moment of the claim.
+  claimNote(p, role) {
+    const hand = this.hidden(p).map((c) => cap(c.role)).join(' + ');
+    return this.hidden(p).some((c) => c.role === role)
+      ? `HONEST: ${p.name} really holds ${cap(role)} (hand: ${hand}).`
+      : `BLUFF: ${p.name} has no ${cap(role)} (hand: ${hand}).`;
   }
   player(id) {
     const p = this.players.find((x) => x.id === id);
@@ -241,7 +258,7 @@ export class Game {
       steal: `claims Captain and tries to steal from ${t}`,
       exchange: 'claims Ambassador to Exchange',
     };
-    this.addLog(`${actor.name} ${phrases[action]}.`);
+    this.addLog(`${actor.name} ${phrases[action]}.`, def.claim ? this.claimNote(actor, def.claim) : null);
 
     if (action === 'income') {
       actor.coins += 1;
@@ -275,7 +292,7 @@ export class Game {
     const p = this.player(pid);
     this.ctx.blocker = pid;
     this.ctx.blockRole = role;
-    this.addLog(`${p.name} claims ${cap(role)} to block.`);
+    this.addLog(`${p.name} claims ${cap(role)} to block.`, this.claimNote(p, role));
     return this.openChallenge('block', pid, role, []);
   }
 
@@ -299,10 +316,15 @@ export class Game {
     this.addLog(`${challenger.name} challenges ${claimant.name}'s ${cap(w.role)}.`);
     const card = this.hidden(claimant).find((c) => c.role === w.role);
     if (card) {
-      this.addLog(`${claimant.name} reveals ${cap(w.role)}, shuffles it into the deck and draws a new card. The challenge fails.`);
+      this.addLog(`${claimant.name} shows ${cap(w.role)}: the claim was true, so ${challenger.name}'s challenge fails.`);
       this.deck.push(card.role);
       shuffle(this.deck, this.rng);
       card.role = this.draw();
+      this.addLog(
+        `${claimant.name} shuffles that ${cap(w.role)} back into the court deck and draws a face-down replacement. ` +
+          `It is not lost: ${claimant.name} still has ${this.hidden(claimant).length} influence, and ${cap(w.role)} is no longer known to be in their hand.`,
+        `${claimant.name} drew ${cap(card.role)} as the replacement.`,
+      );
       this.queueLoss(challengerId, 'lost a challenge');
       // Blockers who had already allowed the action don't get a second chance.
       this.ctx.declinedBlock = w.passed;
@@ -426,6 +448,8 @@ export class Game {
   finishExchange(pid, keep) {
     const p = this.player(pid);
     const hidden = this.hidden(p);
+    const before = hidden.map((c) => cap(c.role)).join(' + ');
+    const drawn = this.ctx.drawn.map(cap).join(' + ');
     const pool = [...hidden.map((c) => c.role), ...this.ctx.drawn];
     keep.forEach((role, i) => {
       pool.splice(pool.indexOf(role), 1);
@@ -433,7 +457,10 @@ export class Game {
     });
     this.deck.push(...pool);
     shuffle(this.deck, this.rng);
-    this.addLog(`${p.name} exchanges cards with the deck.`);
+    this.addLog(
+      `${p.name} exchanges cards with the deck.`,
+      `${p.name} had ${before}, drew ${drawn}, kept ${keep.map(cap).join(' + ')}, returned ${pool.map(cap).join(' + ')}.`,
+    );
     this.ctx.drawn = null;
     return this.step('endTurn');
   }
@@ -480,6 +507,12 @@ export class Game {
       return this.step('resolve');
     }
     if (this.phase === 'challenge' || this.phase === 'block') return this.checkWindowClosed();
+  }
+
+  // Full private record of a finished game.
+  privateRecord() {
+    if (this.phase !== 'over') throw new Error('private record requested before game over');
+    return { startingHands: this.startingHands, winner: this.player(this.winner).name, events: this.history };
   }
 
   // ---------- views ----------

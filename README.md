@@ -54,6 +54,7 @@ Every room endpoint except `join` takes `Authorization: Bearer <token>`.
 | `GET /api/rooms/:code/watch[?since=V&wait=S]` | | public view, **no token needed** (see below) |
 | `POST /api/rooms/:code/narrator` | `{paused?, stepMode?}` | public view. Auth: narrator key or host token |
 | `POST /api/rooms/:code/narrator/advance` | | public view. Releases a step-mode hold |
+| `GET /api/rooms/:code/reveal[?game=N]` | | private record of a finished game (hands, bluffs, draws). Auth: narrator key or host token |
 
 Each view includes `legal`, the exact list of moves you may make right now, each with a human-readable `label`.
 

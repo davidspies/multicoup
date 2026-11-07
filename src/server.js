@@ -116,6 +116,12 @@ async function route(lobby, req, res) {
     return send(res, 200, room.publicView());
   }
 
+  // Post-game reveal with private information: narrator key or host token.
+  if (req.method === 'GET' && op === 'reveal') {
+    narratorAuth(req, room);
+    return send(res, 200, room.reveal(url.searchParams.get('game')));
+  }
+
   // Spectator feed: public information only, no token needed.
   if (req.method === 'GET' && op === 'watch') {
     await longPoll(url, room);

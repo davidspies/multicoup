@@ -199,3 +199,34 @@ test('narrator: step mode stops the auto-pass timer while held', async () => {
   st = (await call('POST', `${R}/narrator/advance`, {}, key)).data;
   assert.ok(st.responseDeadline);
 });
+
+test('reveal: private record only after the game, only for the narrator', async () => {
+  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
+  const R = `/api/rooms/${a.code}`;
+  const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
+  assert.equal((await call('GET', `${R}/reveal`, undefined, key)).status, 409);
+  await call('POST', `${R}/start`, {}, a.token);
+  assert.equal((await call('GET', `${R}/reveal?game=1`, undefined, key)).status, 409);
+  // Play randomly to the end.
+  for (;;) {
+    const views = await Promise.all([a, b].map((s) => call('GET', `${R}/state`, undefined, s.token)));
+    if (views[0].data.game.phase === 'over') break;
+    const i = views.findIndex((v) => v.data.legal.length);
+    const legal = views[i].data.legal;
+    const { label, ...move } = legal[Math.floor(Math.random() * legal.length)];
+    await call('POST', `${R}/act`, { move }, [a, b][i].token);
+  }
+  assert.equal((await call('GET', `${R}/reveal`, undefined, b.token)).status, 403);
+  assert.equal((await call('GET', `${R}/reveal`)).status, 401);
+  const rec = (await call('GET', `${R}/reveal`, undefined, key)).data;
+  assert.equal(rec.gameNumber, 1);
+  assert.equal(rec.startingHands.length, 2);
+  assert.ok(rec.startingHands.every((h) => h.hand.length === 2));
+  const st = (await call('GET', `${R}/watch`)).data;
+  assert.deepEqual(rec.events.map((e) => e.text), st.game.log);
+  assert.ok(rec.events.every((e) => Object.keys(e.hands).length === 2));
+  for (const e of rec.events) if (/claims/.test(e.text)) assert.match(e.note, /^(HONEST|BLUFF):/);
+  assert.equal((await call('GET', `${R}/reveal?game=1`, undefined, a.token)).status, 200);
+  assert.equal((await call('GET', `${R}/reveal?game=7`, undefined, key)).status, 404);
+});

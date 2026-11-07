@@ -83,6 +83,11 @@ test('failed challenge: challenger loses, claimant replaces card, action proceed
   g.apply('p2', { type: 'lose', role });
   assert.equal(g.player('p2').cards.filter((c) => c.revealed).length, 1);
   assert.equal(g.player('p1').coins, 5);
+  // The public log spells out that the proven card went back and was replaced, not lost.
+  assert.ok(g.log.some((l) => /P1 shows Duke: the claim was true/.test(l)));
+  assert.ok(g.log.some((l) => /shuffles that Duke back into the court deck and draws a face-down replacement\. It is not lost/.test(l)));
+  const replaced = g.history.find((h) => /replacement/.test(h.text));
+  assert.match(replaced.note, /^P1 drew \w+ as the replacement\.$/);
   g.checkInvariants();
 });
 

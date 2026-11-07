@@ -8,6 +8,8 @@ export const config = {
   // Rooms with no activity for this long are deleted.
   roomIdleHours: 12,
   chatHistory: 200,
+  // Finished games whose private record (hands, bluffs, draws) is kept for the narrator.
+  revealHistory: 20,
   // Initial per-room settings; the room's host can change them.
   roomDefaults: {
     // Seconds before undecided players auto-pass a challenge/block window. 0 = wait forever.

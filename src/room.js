@@ -23,6 +23,7 @@ export class Room {
     this.gamePlayerIds = [];
     this.lastWinner = null;
     this.results = [];
+    this.records = new Map(); // gameNumber -> private record of a finished game
     this.chat = [];
     this.chatSeq = 0;
     this.settings = { ...config.roomDefaults };
@@ -79,6 +80,17 @@ export class Room {
     }
     this.afterGameChange();
     this.changed();
+  }
+
+  // Private record of a finished game. Defaults to the most recent one.
+  reveal(gameParam) {
+    if (!this.records.size) throw new HttpError(409, 'no game has finished yet');
+    const n = gameParam === null ? [...this.records.keys()].at(-1) : Number(gameParam);
+    if (!Number.isInteger(n)) throw new HttpError(400, 'game must be a game number');
+    if (n === this.gameNumber && this.inProgress()) throw new HttpError(409, `game ${n} is still in progress`);
+    const rec = this.records.get(n);
+    if (!rec) throw new HttpError(404, `no record of game ${n} (kept: ${[...this.records.keys()].join(', ')})`);
+    return rec;
   }
 
   advance() {
@@ -211,6 +223,8 @@ export class Room {
       if (winner) winner.wins++;
       this.lastWinner = g.winner;
       this.results.push({ gameNumber: this.gameNumber, winner: g.winner, winnerName: g.player(g.winner).name });
+      this.records.set(this.gameNumber, { gameNumber: this.gameNumber, ...g.privateRecord() });
+      if (this.records.size > config.revealHistory) this.records.delete(this.records.keys().next().value);
       this.system(`${g.player(g.winner).name} won game ${this.gameNumber}.`);
     }
     this.maybeHold();
