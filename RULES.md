@@ -28,16 +28,16 @@ When anyone claims a character (to act or to block), every other living player c
 - **If they don't**, the claimant loses an influence and the action or block fails. Coins paid for a failed Assassinate are returned.
 
 ## Blocks
-After an action survives any challenge, eligible players can **block** it (see the table). A block is itself a claim and can be challenged by anyone. If the block stands, the action has no effect (but coins paid for Assassinate stay spent).
+Eligible players can **block** an action (see the table). For Steal and Assassinate, the target may block straight away, alongside the chance to challenge. **As soon as anyone blocks, the action itself can no longer be challenged.** If the action is challenged first and survives, a target who hadn't yet answered can still block. A block is itself a claim and can be challenged by anyone. If the block stands, the action has no effect (but coins paid for Assassinate stay spent).
 
 ## Losing influence
 When you lose an influence you choose which card to reveal. It stays face up for the rest of the game. With no face-down cards left, you're out. A player can lose two influences in one turn, for example by challenging an Assassin wrongly and then being assassinated.
 
 ## Order of play in this app
 1. The active player declares an action (paying any cost).
-2. If it claims a character, every other living player chooses **challenge** or **pass**.
-3. If it can be blocked, the eligible player(s) choose **block** or **pass**.
-4. If someone blocks, everyone except the blocker chooses **challenge** or **pass**.
+2. Every other living player responds at once: **challenge** or **pass** for Tax/Exchange; **challenge**, **allow**, or (target only) **block** for Steal/Assassinate; **block** or **pass** for Foreign Aid. The first challenge or block ends the window. If everyone passes, the action happens.
+3. If a challenge fails (the claim was true), a target who hadn't answered yet may still block.
+4. If someone blocks, everyone except the blocker chooses **challenge** or **pass** on the block.
 5. The action resolves (or doesn't). Play moves to the next living player clockwise.
 
 A room's host can set a **response timeout**. Undecided players then automatically pass challenge/block windows after that many seconds.

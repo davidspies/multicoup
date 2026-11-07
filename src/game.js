@@ -131,8 +131,11 @@ export class Game {
         add('exchange');
         return moves;
       }
-      case 'challenge':
-        return [{ type: 'pass' }, { type: 'challenge' }];
+      case 'challenge': {
+        // Steal/Assassinate: the target may block right away instead of waiting for challenges.
+        const roles = this.ctx.window.blockers.includes(pid) ? ACTIONS[this.ctx.action].blockRoles : [];
+        return [{ type: 'pass' }, { type: 'challenge' }, ...roles.map((role) => ({ type: 'block', role }))];
+      }
       case 'block': {
         const roles = ACTIONS[this.ctx.action].blockRoles;
         return [{ type: 'pass' }, ...roles.map((role) => ({ type: 'block', role }))];
@@ -172,7 +175,8 @@ export class Game {
           exchange: 'Exchange cards — claims Ambassador',
         }[m.action];
       case 'pass':
-        return this.phase === 'block' ? "Don't block" : "Don't challenge";
+        if (this.phase === 'block') return "Don't block";
+        return this.ctx.window.blockers.includes(pid) ? 'Allow it (no challenge, no block)' : "Don't challenge";
       case 'challenge': {
         const w = this.ctx.window;
         return `Challenge ${name(w.claimant)}'s ${cap(w.role)}`;
@@ -248,15 +252,23 @@ export class Game {
       this.ctx.next = 'endTurn';
       return this.runLosses();
     }
-    if (def.claim) return this.openChallenge('action', pid, def.claim);
+    if (def.claim) return this.openChallenge('action', pid, def.claim, this.eligibleBlockers());
     return this.step('toBlock');
   }
 
-  openChallenge(kind, claimant, role) {
+  // blockers: players who may block the action from inside this challenge window.
+  openChallenge(kind, claimant, role, blockers) {
     this.phase = 'challenge';
     this.windowSeq++;
-    this.ctx.window = { kind, claimant, role, passed: new Set() };
+    this.ctx.window = { kind, claimant, role, blockers, passed: new Set() };
     return this.checkWindowClosed();
+  }
+
+  eligibleBlockers() {
+    const def = ACTIONS[this.ctx.action];
+    if (def.blockers === 'any') return this.alivePlayers().filter((p) => p.id !== this.ctx.actor).map((p) => p.id);
+    if (def.blockers === 'target') return [this.ctx.target];
+    return [];
   }
 
   declareBlock(pid, role) {
@@ -264,14 +276,15 @@ export class Game {
     this.ctx.blocker = pid;
     this.ctx.blockRole = role;
     this.addLog(`${p.name} claims ${cap(role)} to block.`);
-    return this.openChallenge('block', pid, role);
+    return this.openChallenge('block', pid, role, []);
   }
 
   checkWindowClosed() {
     if (this.phase === 'challenge' && this.awaiting().length === 0) {
       const w = this.ctx.window;
       this.ctx.window = null;
-      if (w.kind === 'action') return this.step('toBlock');
+      // Everyone passed, including any blockers, so the action resolves.
+      if (w.kind === 'action') return this.step('resolve');
       this.addLog(`The block stands.`);
       return this.step('endTurn');
     }
@@ -291,6 +304,8 @@ export class Game {
       shuffle(this.deck, this.rng);
       card.role = this.draw();
       this.queueLoss(challengerId, 'lost a challenge');
+      // Blockers who had already allowed the action don't get a second chance.
+      this.ctx.declinedBlock = w.passed;
       this.ctx.next = w.kind === 'action' ? 'toBlock' : 'endTurn';
     } else {
       this.addLog(`${claimant.name} does not have ${cap(w.role)}. The challenge succeeds.`);
@@ -344,15 +359,13 @@ export class Game {
   step(name) {
     if (name === 'endTurn') return this.endTurn();
     const ctx = this.ctx;
-    const def = ACTIONS[ctx.action];
     const actor = this.player(ctx.actor);
     const target = ctx.target ? this.player(ctx.target) : null;
     switch (name) {
       case 'toBlock': {
         if (!this.alive(actor) || (target && !this.alive(target))) return this.step('endTurn');
-        let blockers = [];
-        if (def.blockers === 'any') blockers = this.alivePlayers().filter((p) => p.id !== actor.id).map((p) => p.id);
-        else if (def.blockers === 'target') blockers = [target.id];
+        const declined = ctx.declinedBlock ?? new Set();
+        const blockers = this.eligibleBlockers().filter((id) => !declined.has(id));
         if (!blockers.length) return this.step('resolve');
         this.phase = 'block';
         this.windowSeq++;
@@ -493,6 +506,7 @@ export class Game {
         blocker: ctx.blocker,
         blockRole: ctx.blockRole,
         challengeOf: ctx.window ? ctx.window.kind : null,
+        canBlockNow: ctx.window ? ctx.window.blockers : [],
       },
       losing: this.phase === 'lose' ? this.lossQueue[0] : null,
       drawn: this.phase === 'exchange' && ctx.actor === pid ? ctx.drawn : null,

@@ -100,20 +100,59 @@ test('successful challenge on assassinate refunds coins', () => {
   assert.equal(g.turn, 1);
 });
 
-test('assassination blocked by contessa; coins stay spent', () => {
+test('target can block immediately, alongside challenge; then no one can challenge the action', () => {
   const g = newGame(3);
   setHand(g, 'p1', ['assassin', 'duke']);
   g.player('p1').coins = 3;
   g.apply('p1', { type: 'action', action: 'assassinate', target: 'p2' });
-  passAllResponders(g);
-  assert.equal(g.phase, 'block');
-  assert.deepEqual(g.awaiting(), ['p2']);
-  g.apply('p2', { type: 'block', role: 'contessa' });
   assert.equal(g.phase, 'challenge');
+  assert.deepEqual(g.awaiting().sort(), ['p2', 'p3']);
+  assert.deepEqual(g.legalMoves('p2').map((m) => m.role ?? m.type), ['pass', 'challenge', 'contessa']);
+  assert.deepEqual(g.legalMoves('p3').map((m) => m.type), ['pass', 'challenge']);
+  g.apply('p2', { type: 'block', role: 'contessa' });
+  // Now only the block can be challenged, by everyone but the blocker.
+  assert.equal(g.view('p1').pending.challengeOf, 'block');
+  assert.deepEqual(g.awaiting().sort(), ['p1', 'p3']);
   passAllResponders(g);
   assert.equal(g.player('p1').coins, 0);
-  assert.equal(g.player('p2').influence ?? g.hidden(g.player('p2')).length, 2);
+  assert.equal(g.hidden(g.player('p2')).length, 2);
   assert.equal(g.turn, 1);
+});
+
+test('everyone allowing resolves the action with no separate block step', () => {
+  const g = newGame(3);
+  g.player('p2').coins = 1;
+  g.apply('p1', { type: 'action', action: 'steal', target: 'p2' });
+  passAllResponders(g);
+  assert.equal(g.player('p1').coins, 3);
+  assert.equal(g.player('p2').coins, 0);
+  assert.equal(g.phase, 'action');
+});
+
+test('after a failed challenge, a target who had not yet answered may still block', () => {
+  const g = newGame(3);
+  setHand(g, 'p1', ['captain', 'duke']);
+  setHand(g, 'p3', ['assassin', 'contessa']);
+  g.apply('p1', { type: 'action', action: 'steal', target: 'p2' });
+  g.apply('p3', { type: 'challenge' });
+  g.apply('p3', { type: 'lose', role: 'assassin' });
+  assert.equal(g.phase, 'block');
+  assert.deepEqual(g.awaiting(), ['p2']);
+  g.apply('p2', { type: 'block', role: 'ambassador' });
+  passAllResponders(g);
+  assert.equal(g.player('p1').coins, 2);
+});
+
+test('a target who already allowed gets no block after a failed challenge', () => {
+  const g = newGame(3);
+  setHand(g, 'p1', ['captain', 'duke']);
+  setHand(g, 'p3', ['assassin', 'contessa']);
+  g.apply('p1', { type: 'action', action: 'steal', target: 'p2' });
+  g.apply('p2', { type: 'pass' });
+  g.apply('p3', { type: 'challenge' });
+  g.apply('p3', { type: 'lose', role: 'assassin' });
+  assert.equal(g.phase, 'action');
+  assert.equal(g.player('p1').coins, 4);
 });
 
 test('bluffed contessa called: target loses both influence', () => {
@@ -122,7 +161,6 @@ test('bluffed contessa called: target loses both influence', () => {
   setHand(g, 'p2', ['captain', 'duke']);
   g.player('p1').coins = 3;
   g.apply('p1', { type: 'action', action: 'assassinate', target: 'p2' });
-  passAllResponders(g);
   g.apply('p2', { type: 'block', role: 'contessa' });
   g.apply('p1', { type: 'challenge' });
   g.apply('p2', { type: 'lose', role: 'captain' });
@@ -131,21 +169,19 @@ test('bluffed contessa called: target loses both influence', () => {
   g.checkInvariants();
 });
 
-test('steal transfers up to 2; blocked by ambassador', () => {
+test('wrongly challenging an assassin, then bluffing contessa, loses both', () => {
   const g = newGame(3);
-  g.player('p2').coins = 1;
-  g.apply('p1', { type: 'action', action: 'steal', target: 'p2' });
-  passAllResponders(g);
-  g.apply('p2', { type: 'pass' });
-  assert.equal(g.player('p1').coins, 3);
-  assert.equal(g.player('p2').coins, 0);
-
-  const h = newGame(3);
-  h.apply('p1', { type: 'action', action: 'steal', target: 'p2' });
-  passAllResponders(h);
-  h.apply('p2', { type: 'block', role: 'ambassador' });
-  passAllResponders(h);
-  assert.equal(h.player('p1').coins, 2);
+  setHand(g, 'p1', ['assassin', 'duke']);
+  setHand(g, 'p2', ['captain', 'duke']);
+  g.player('p1').coins = 3;
+  g.apply('p1', { type: 'action', action: 'assassinate', target: 'p2' });
+  g.apply('p2', { type: 'challenge' });
+  g.apply('p2', { type: 'lose', role: 'captain' });
+  assert.equal(g.phase, 'block');
+  g.apply('p2', { type: 'block', role: 'contessa' });
+  g.apply('p1', { type: 'challenge' });
+  assert.equal(g.alive(g.player('p2')), false);
+  g.checkInvariants();
 });
 
 test('foreign aid can be blocked by anyone claiming duke', () => {

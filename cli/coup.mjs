@@ -90,8 +90,10 @@ function situation(st) {
     case 'action':
       return `${n(g.turn)}'s turn to choose an action.`;
     case 'challenge':
-      if (pend.challengeOf === 'action')
-        return `${n(pend.actor)} claims ${cap(pend.claim)} for ${ACTION_TEXT[pend.action]}${target}. Waiting for ${who} to decide whether to challenge.`;
+      if (pend.challengeOf === 'action') {
+        const blk = pend.canBlockNow.length ? ` ${pend.canBlockNow.map(n).join(', ')} may block instead; once anyone blocks, the action can no longer be challenged.` : '';
+        return `${n(pend.actor)} claims ${cap(pend.claim)} for ${ACTION_TEXT[pend.action]}${target}. Waiting for ${who} to respond.${blk}`;
+      }
       return `${n(pend.blocker)} claims ${cap(pend.blockRole)} to block ${n(pend.actor)}'s ${ACTION_TEXT[pend.action]}. Waiting for ${who} to decide whether to challenge the block.`;
     case 'block':
       return `${n(pend.actor)}'s ${ACTION_TEXT[pend.action]}${target} may be blocked. Waiting for ${who} to decide whether to block.`;

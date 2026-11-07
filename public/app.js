@@ -185,7 +185,10 @@ function situation() {
       return { text: g.turn === state.you ? 'Your turn: choose an action.' : `${n(g.turn)} is choosing an action…` };
     case 'challenge':
       if (p.challengeOf === 'action')
-        return { text: `${n(p.actor)} claims ${cap(p.claim)}: ${ACTION_TEXT[p.action]}${target}.`, sub: `Waiting on ${who} to challenge or pass.` };
+        return {
+          text: `${n(p.actor)} claims ${cap(p.claim)}: ${ACTION_TEXT[p.action]}${target}.`,
+          sub: `Waiting on ${who} to ${p.canBlockNow.length ? `respond (${p.canBlockNow.map(n).join(', ')} can block)` : 'challenge or pass'}.`,
+        };
       return { text: `${n(p.blocker)} blocks ${n(p.actor)}'s ${ACTION_TEXT[p.action]} with ${cap(p.blockRole)}.`, sub: `Waiting on ${who} to challenge or pass.` };
     case 'block':
       return { text: `${n(p.actor)}: ${ACTION_TEXT[p.action]}${target}.`, sub: `Waiting on ${who} to block or pass.` };
@@ -284,7 +287,8 @@ function renderDecision() {
     }
   } else {
     const titles = { challenge: 'Challenge?', block: 'Block?', lose: 'Choose a card to lose', exchange: 'Choose which cards to keep' };
-    html += `<h3>${titles[g.phase]}</h3>`;
+    const title = st.legal.some((m) => m.type === 'block') && g.phase === 'challenge' ? 'Challenge, block, or allow?' : titles[g.phase];
+    html += `<h3>${title}</h3>`;
     if (g.phase === 'exchange') html += `<p class="muted">You drew: ${g.drawn.map(cap).join(', ')}</p>`;
     html += `<div class="moves">${st.legal
       .map((m) => `<button class="${m.type === 'pass' ? '' : 'primary'}" data-move="${idx(m)}">${esc(m.label)}</button>`)
