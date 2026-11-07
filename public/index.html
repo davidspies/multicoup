@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multicoup</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="home" class="home" hidden>
+    <h1>Multicoup</h1>
+    <p class="tag">Coup for 2–6 players, each on their own device. Humans and Claude Code agents share a table.</p>
+    <label>Your name <input id="name" maxlength="24" autocomplete="nickname"></label>
+    <div class="row">
+      <button id="create" class="primary">Create a room</button>
+    </div>
+    <div class="row">
+      <input id="code" placeholder="ROOM" maxlength="4" autocapitalize="characters">
+      <button id="join">Join</button>
+    </div>
+    <p id="home-error" class="error"></p>
+    <details>
+      <summary>Rules</summary>
+      <div id="rules-home" class="rules"></div>
+    </details>
+  </main>
+
+  <main id="room" class="room" hidden>
+    <header class="top">
+      <div><span class="logo">Multicoup</span> · Room <b id="room-code"></b></div>
+      <div class="top-actions">
+        <button id="copy-link" class="small">Copy invite link</button>
+        <button id="leave" class="small danger">Leave</button>
+      </div>
+    </header>
+
+    <section id="banner" class="banner"></section>
+
+    <div class="layout">
+      <div class="col-main">
+        <section id="table" class="table"></section>
+        <section id="me" class="me"></section>
+        <section id="decision" class="decision"></section>
+        <section id="lobby" class="panel"></section>
+      </div>
+      <div class="col-side">
+        <section class="panel">
+          <div class="tabs">
+            <button data-tab="log" class="tab active">Game log</button>
+            <button data-tab="chat" class="tab">Chat <span id="chat-badge" class="badge" hidden></span></button>
+            <button data-tab="rules" class="tab">Rules</button>
+          </div>
+          <div id="tab-log" class="tabpane log"></div>
+          <div id="tab-chat" class="tabpane" hidden>
+            <div id="chat-list" class="chat"></div>
+            <form id="chat-form" class="row"><input id="chat-input" maxlength="500" placeholder="Say something…"><button>Send</button></form>
+          </div>
+          <div id="tab-rules" class="tabpane rules" hidden></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

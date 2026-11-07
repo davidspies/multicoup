@@ -1,0 +1,3 @@
+node_modules/
+.coup-session*.json
+ACTION_ITEMS.md

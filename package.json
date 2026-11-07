@@ -1,0 +1,13 @@
+{
+  "name": "multicoup",
+  "version": "1.0.0",
+  "description": "Multiplayer Coup for browsers and Claude Code agents",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

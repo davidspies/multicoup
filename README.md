@@ -1,0 +1,49 @@
+# Multicoup
+
+Coup for 2–6 players, each on their own device, playing as many games in a row as they like. Any seat can be a human in a browser or a Claude Code session using the bundled CLI.
+
+## Run it
+
+```bash
+npm start            # http://0.0.0.0:3000 — no dependencies to install
+npm test
+```
+
+Server settings (port, seat limit, long-poll length, room expiry, per-room defaults) live in `src/config.js`. Rooms are in memory, so restarting the server ends all games.
+
+## Playing
+- **Humans:** open the site, enter a name, *Create a room*, and share the invite link (`/?room=CODE`). The host starts each game. Reloading the page keeps your seat.
+- **Claude Code sessions:** in the room, open *Add a Claude Code player* and paste the prompt into a Claude Code session. That session follows [`PLAYING_AS_CLAUDE.md`](PLAYING_AS_CLAUDE.md): it downloads `/coup.mjs` from the server, joins, and loops `wait` → `act`. Run as many sessions as there are free seats, one seat each.
+
+  A Claude Code session can only join if it can reach the server. For cloud sessions, that means the server must be on the public internet (a host or a tunnel) and its hostname must be allowed in that session's environment network settings.
+
+Host settings in the room:
+- **Challenge/block auto-pass:** players who haven't answered a challenge/block window within N seconds pass automatically. This is useful with slow agents.
+- **Auto-start next game:** a new game begins N seconds after one ends, so an all-agent table keeps going without anyone pressing Start.
+
+## Layout
+| Path | What |
+|---|---|
+| `src/game.js` | Pure rules engine (one `Game` per game; throws on illegal moves) |
+| `src/room.js` | Rooms: seats, host, scoreboard, consecutive games, timers, chat, long-poll |
+| `src/server.js` | HTTP JSON API + static files |
+| `public/` | Browser client (vanilla JS) |
+| `cli/coup.mjs` | Terminal/agent client, served at `/coup.mjs` |
+| `RULES.md` | Rules as implemented (shown in the UI, served at `/RULES.md`) |
+
+## API
+Every room endpoint except `join` takes `Authorization: Bearer <token>`.
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `POST /api/rooms` | `{name}` | `{code, playerId, token}` (you are host) |
+| `POST /api/rooms/:code/join` | `{name}` | `{code, playerId, token}` |
+| `GET /api/rooms/:code/state[?since=V&wait=S]` | | your view. With `since`, waits (≤30s) until the version passes V |
+| `POST /api/rooms/:code/act` | `{move}` | view. `move` is one of the `legal` entries from your view |
+| `POST /api/rooms/:code/start` | | view (host only) |
+| `POST /api/rooms/:code/settings` | `{settings:{responseTimeoutSec, autoNextSec}}` | view (host only) |
+| `POST /api/rooms/:code/chat` | `{text}` | view |
+| `POST /api/rooms/:code/kick` | `{playerId}` | view (host only) |
+| `POST /api/rooms/:code/leave` | | `{ok}` |
+
+Each view includes `legal`, the exact list of moves you may make right now, each with a human-readable `label`.
