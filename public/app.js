@@ -79,6 +79,39 @@ function showHome(msg) {
   const params = new URLSearchParams(location.search);
   if (params.get('room')) $('code').value = params.get('room').toUpperCase();
   $('name').value = localStorage.getItem('multicoup:name') ?? '';
+  listMyRooms();
+}
+
+// Seats this browser holds, checked against the server so dead rooms drop out.
+async function listMyRooms() {
+  const saved = Object.keys(localStorage)
+    .filter((k) => /^multicoup:[A-Z]{4}$/.test(k))
+    .map((k) => JSON.parse(localStorage.getItem(k)));
+  const live = [];
+  for (const s of saved) {
+    const res = await fetch(`/api/rooms/${s.code}/state`, { headers: { authorization: `Bearer ${s.token}` } });
+    if (res.status === 403 || res.status === 404) {
+      localStorage.removeItem(storeKey(s.code));
+      continue;
+    }
+    if (!res.ok) throw new Error(`checking room ${s.code}: HTTP ${res.status}`);
+    const st = await res.json();
+    live.push({ s, name: st.members.find((m) => m.id === st.you).name, st });
+  }
+  $('my-rooms').hidden = live.length === 0;
+  $('my-rooms-list').innerHTML = live
+    .map(
+      ({ s, name, st }) => `<li><span>Room <b>${esc(s.code)}</b> as ${esc(name)} <span class="muted">· ${st.members.length} seated${st.inProgress ? ' · game in progress' : ''}</span></span>
+        <button class="primary small" data-rejoin="${esc(s.code)}">Rejoin</button></li>`,
+    )
+    .join('');
+  $('my-rooms-list').querySelectorAll('[data-rejoin]').forEach((b) => {
+    b.onclick = () => {
+      session = live.find((x) => x.s.code === b.dataset.rejoin).s;
+      history.replaceState(null, '', `?room=${session.code}`);
+      startRoom();
+    };
+  });
 }
 
 async function enter(code) {
@@ -102,6 +135,13 @@ $('create').onclick = () => enter(null);
 $('join').onclick = () => {
   const code = $('code').value.trim().toUpperCase();
   if (code.length !== 4) return ($('home-error').textContent = 'Room codes are 4 letters.');
+  const saved = localStorage.getItem(storeKey(code));
+  if (saved) {
+    // Already seated in this room from this browser: go back to that seat.
+    session = JSON.parse(saved);
+    history.replaceState(null, '', `?room=${code}`);
+    return startRoom();
+  }
   enter(code);
 };
 
