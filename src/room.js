@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
-import { Game, IllegalMove } from './game.js';
+import { IllegalMove } from './games/common.js';
+import { GAMES } from './games/index.js';
 import { config } from './config.js';
 
 export class HttpError extends Error {
@@ -13,15 +14,18 @@ const rng = () => randomInt(2 ** 32) / 2 ** 32;
 const SETTING_LIMITS = { responseTimeoutSec: [0, 3600], autoNextSec: [0, 3600] };
 
 export class Room {
-  constructor(code) {
+  constructor(code, kind) {
     this.code = code;
+    this.kind = kind;
+    this.Engine = GAMES[kind];
+    this.options = this.Engine.defaultOptions();
     this.members = []; // seating order: {id, name, token, wins, played}
     this.nextId = 1;
     this.hostId = null;
     this.game = null;
     this.gameNumber = 0;
     this.gamePlayerIds = [];
-    this.lastWinner = null;
+    this.lastWinners = [];
     this.results = [];
     this.records = new Map(); // gameNumber -> private record of a finished game
     this.chat = [];
@@ -49,7 +53,7 @@ export class Room {
 
   situationKey() {
     const g = this.game;
-    return g && `${this.gameNumber}:${g.turnNumber}:${g.phase}:${g.windowSeq}:${g.lossQueue[0]?.id ?? ''}`;
+    return g && `${this.gameNumber}:${g.situationKey()}`;
   }
 
   // In step mode, hold whenever the game reaches a new situation (not on every single pass).
@@ -117,7 +121,8 @@ export class Room {
   join(rawName) {
     const name = String(rawName ?? '').trim();
     if (!name || name.length > 24) throw new HttpError(400, 'name must be 1-24 characters');
-    if (this.members.length >= config.maxSeats) throw new HttpError(409, `room is full (${config.maxSeats} seats)`);
+    const seats = this.Engine.meta.maxPlayers;
+    if (this.members.length >= seats) throw new HttpError(409, `room is full (${seats} seats)`);
     if (this.members.some((m) => m.name.toLowerCase() === name.toLowerCase()))
       throw new HttpError(409, `name "${name}" is taken in this room`);
     const m = { id: `p${this.nextId++}`, name, token: randomBytes(18).toString('base64url'), wins: 0, played: 0 };
@@ -155,13 +160,17 @@ export class Room {
 
   startGame() {
     if (this.inProgress()) throw new HttpError(409, 'a game is already in progress');
-    if (this.members.length < 2) throw new HttpError(409, 'need at least 2 players');
+    const min = this.Engine.meta.minPlayers;
+    if (this.members.length < min) throw new HttpError(409, `need at least ${min} players`);
     this.clearNextTimer();
     const players = this.members.map((m) => ({ id: m.id, name: m.name }));
-    const winnerIdx = players.findIndex((p) => p.id === this.lastWinner);
-    // Official rule: the previous winner starts; otherwise random.
-    const startIndex = winnerIdx >= 0 ? winnerIdx : randomInt(players.length);
-    this.game = new Game(players, { rng, startIndex });
+    const startIndex = this.Engine.startIndex(players, this.lastWinners, randomInt);
+    try {
+      this.game = new this.Engine(players, { rng, startIndex, options: this.options });
+    } catch (e) {
+      if (e instanceof IllegalMove) throw new HttpError(409, e.message);
+      throw e;
+    }
     this.gameNumber++;
     this.gamePlayerIds = players.map((p) => p.id);
     this.members.forEach((m) => m.played++);
@@ -199,6 +208,22 @@ export class Room {
     if (this.chat.length > config.chatHistory) this.chat.shift();
   }
 
+  // Game options (e.g. Hull Breach's special roles); validated by the engine, checked fully at start.
+  updateOptions(byId, patch) {
+    this.requireHost(byId);
+    if (!patch || typeof patch !== 'object') throw new HttpError(400, 'options must be an object');
+    const next = { ...this.options, ...patch };
+    try {
+      this.Engine.validateOptions(next);
+    } catch (e) {
+      if (e instanceof IllegalMove) throw new HttpError(400, e.message);
+      throw e;
+    }
+    this.options = next;
+    this.system(`Game options: ${Object.entries(next).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none'}.`);
+    this.changed();
+  }
+
   updateSettings(byId, patch) {
     this.requireHost(byId);
     if (!patch || typeof patch !== 'object') throw new HttpError(400, 'settings must be an object');
@@ -219,13 +244,13 @@ export class Room {
     const g = this.game;
     if (!g) return;
     if (g.phase === 'over' && !this.results.some((r) => r.gameNumber === this.gameNumber)) {
-      const winner = this.members.find((m) => m.id === g.winner);
-      if (winner) winner.wins++;
-      this.lastWinner = g.winner;
-      this.results.push({ gameNumber: this.gameNumber, winner: g.winner, winnerName: g.player(g.winner).name });
+      const winners = g.winners();
+      this.members.filter((m) => winners.includes(m.id)).forEach((m) => m.wins++);
+      this.lastWinners = winners;
+      this.results.push({ gameNumber: this.gameNumber, winners, text: g.resultText() });
       this.records.set(this.gameNumber, { gameNumber: this.gameNumber, ...g.privateRecord() });
       if (this.records.size > config.revealHistory) this.records.delete(this.records.keys().next().value);
-      this.system(`${g.player(g.winner).name} won game ${this.gameNumber}.`);
+      this.system(`Game ${this.gameNumber}: ${g.resultText()}`);
     }
     this.maybeHold();
     if (this.gated()) {
@@ -234,33 +259,34 @@ export class Room {
       this.clearNextTimer();
       return;
     }
-    const inWindow = g.phase === 'challenge' || g.phase === 'block';
-    if (!inWindow || !this.settings.responseTimeoutSec) {
+    const win = g.timedWindow();
+    if (win === null || !this.settings.responseTimeoutSec) {
       this.clearWindowTimer();
-    } else if (this.windowTimerSeq !== g.windowSeq) {
+    } else if (this.windowTimerSeq !== win) {
       this.clearWindowTimer();
-      const seq = g.windowSeq;
+      const seq = win;
       const ms = this.settings.responseTimeoutSec * 1000;
       this.windowTimerSeq = seq;
       this.deadline = Date.now() + ms;
       this.windowTimer = setTimeout(() => {
         this.windowTimer = null;
-        if (this.game !== g || g.windowSeq !== seq || !(g.phase === 'challenge' || g.phase === 'block')) return;
-        g.passAll();
+        if (this.game !== g || g.timedWindow() !== seq) return;
+        g.expireWindow();
         this.afterGameChange();
         this.changed();
       }, ms);
     }
-    if (g.phase === 'over' && this.settings.autoNextSec && !this.nextTimer && this.members.length >= 2) {
+    const enough = this.members.length >= this.Engine.meta.minPlayers;
+    if (g.phase === 'over' && this.settings.autoNextSec && !this.nextTimer && enough) {
       const ms = this.settings.autoNextSec * 1000;
       this.nextAt = Date.now() + ms;
       this.nextTimer = setTimeout(() => {
         this.nextTimer = null;
         this.nextAt = null;
-        if (!this.inProgress() && !this.gated() && this.members.length >= 2) this.startGame();
+        if (!this.inProgress() && !this.gated() && this.members.length >= this.Engine.meta.minPlayers) this.startGame();
       }, ms);
     }
-    if (this.nextTimer && (!this.settings.autoNextSec || this.members.length < 2)) this.clearNextTimer();
+    if (this.nextTimer && (!this.settings.autoNextSec || !enough)) this.clearNextTimer();
   }
 
   clearWindowTimer() {
@@ -305,10 +331,18 @@ export class Room {
   view(id) {
     const g = this.game;
     const isHost = id !== null && id === this.hostId;
-    const legal = g && !this.gated() && this.gamePlayerIds.includes(id) ? g.legalMoves(id).map((m) => ({ ...m, label: g.describeMove(id, m) })) : [];
+    const seated = g && this.gamePlayerIds.includes(id);
+    const viewer = seated ? id : null;
+    const legal = seated && !this.gated() ? g.legalMoves(id).map((m) => ({ ...m, label: g.describeMove(id, m) })) : [];
+    const meta = this.Engine.meta;
     return {
       version: this.version,
       code: this.code,
+      kind: this.kind,
+      title: meta.title,
+      minPlayers: meta.minPlayers,
+      maxPlayers: meta.maxPlayers,
+      options: this.options,
       you: id,
       hostId: this.hostId,
       settings: this.settings,
@@ -321,9 +355,11 @@ export class Room {
       })),
       gameNumber: this.gameNumber,
       inProgress: this.inProgress(),
-      game: g && g.view(this.gamePlayerIds.includes(id) ? id : null),
+      game: g && g.view(viewer),
+      situation: g && g.situation(viewer),
+      text: g && g.textView(viewer),
       legal,
-      canStart: isHost && !this.inProgress() && this.members.length >= 2,
+      canStart: isHost && !this.inProgress() && this.members.length >= meta.minPlayers,
       narrator: { paused: this.paused, stepMode: this.stepMode, held: this.held },
       narratorKey: isHost ? this.narratorKey : null,
       responseDeadline: this.deadline,
@@ -338,12 +374,13 @@ export class Lobby {
   constructor() {
     this.rooms = new Map();
   }
-  create() {
+  create(kind) {
+    if (!Object.hasOwn(GAMES, kind)) throw new HttpError(400, `game must be one of: ${Object.keys(GAMES).join(', ')}`);
     const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code;
     do code = Array.from({ length: 4 }, () => letters[randomInt(letters.length)]).join('');
     while (this.rooms.has(code));
-    const room = new Room(code);
+    const room = new Room(code, kind);
     this.rooms.set(code, room);
     return room;
   }

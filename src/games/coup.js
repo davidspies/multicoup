@@ -1,4 +1,7 @@
 // Pure Coup rules engine. No I/O; every illegal move throws.
+import { IllegalMove, fail, cap, shuffle } from './common.js';
+
+export { IllegalMove, cap };
 
 export const ROLES = ['duke', 'assassin', 'captain', 'ambassador', 'contessa'];
 
@@ -14,25 +17,36 @@ export const ACTIONS = {
 
 const MANDATORY_COUP_COINS = 10;
 
-export const cap = (s) => s[0].toUpperCase() + s.slice(1);
-
-function shuffle(arr, rng) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-export class IllegalMove extends Error {}
-
-function fail(msg) {
-  throw new IllegalMove(msg);
-}
+const ACTION_TEXT = {
+  income: 'Income',
+  foreign_aid: 'Foreign Aid',
+  coup: 'Coup',
+  tax: 'Tax (Duke)',
+  assassinate: 'Assassinate (Assassin)',
+  steal: 'Steal (Captain)',
+  exchange: 'Exchange (Ambassador)',
+};
 
 export class Game {
+  static meta = { id: 'coup', title: 'Coup', minPlayers: 2, maxPlayers: 6 };
+
+  static validateOptions(options) {
+    if (Object.keys(options).length) fail('Coup has no game options');
+  }
+
+  static defaultOptions() {
+    return {};
+  }
+
+  // Official rule: the previous winner starts; otherwise random.
+  static startIndex(players, lastWinnerIds, randInt) {
+    const i = players.findIndex((p) => lastWinnerIds.includes(p.id));
+    return i >= 0 ? i : randInt(players.length);
+  }
+
   // players: [{id, name}] in seating order. startIndex: who takes the first turn.
-  constructor(players, { rng, startIndex }) {
+  constructor(players, { rng, startIndex, options }) {
+    Game.validateOptions(options);
     if (players.length < 2 || players.length > 6) fail('Coup needs 2-6 players');
     if (!(startIndex >= 0 && startIndex < players.length)) fail('bad startIndex');
     this.rng = rng;
@@ -513,6 +527,68 @@ export class Game {
   privateRecord() {
     if (this.phase !== 'over') throw new Error('private record requested before game over');
     return { startingHands: this.startingHands, winner: this.player(this.winner).name, events: this.history };
+  }
+
+  // ---------- common engine interface ----------
+  winners() {
+    return this.winner ? [this.winner] : [];
+  }
+  resultText() {
+    return this.winner ? `${this.player(this.winner).name} won.` : 'No winner.';
+  }
+  situationKey() {
+    return `${this.turnNumber}:${this.phase}:${this.windowSeq}:${this.lossQueue[0]?.id ?? ''}`;
+  }
+  timedWindow() {
+    return this.phase === 'challenge' || this.phase === 'block' ? this.windowSeq : null;
+  }
+  expireWindow() {
+    return this.passAll();
+  }
+
+  situation(pid) {
+    const n = (id) => this.player(id).name;
+    const p = this.ctx;
+    const target = p?.target ? ` targeting ${n(p.target)}` : '';
+    const who = this.awaiting().map(n).join(', ');
+    switch (this.phase) {
+      case 'over':
+        return { text: `🏆 ${n(this.winner)} wins!` };
+      case 'action':
+        return { text: this.current().id === pid ? 'Your turn: choose an action.' : `${this.current().name} is choosing an action…` };
+      case 'challenge': {
+        const w = p.window;
+        if (w.kind === 'action') {
+          const blk = w.blockers.length ? ` ${w.blockers.map(n).join(', ')} may block instead; once anyone blocks, the action can no longer be challenged.` : '';
+          return { text: `${n(p.actor)} claims ${cap(p.claim)} for ${ACTION_TEXT[p.action]}${target}.`, sub: `Waiting on ${who} to respond.${blk}` };
+        }
+        return { text: `${n(p.blocker)} claims ${cap(p.blockRole)} to block ${n(p.actor)}'s ${ACTION_TEXT[p.action]}.`, sub: `Waiting on ${who} to challenge the block or pass.` };
+      }
+      case 'block':
+        return { text: `${n(p.actor)}: ${ACTION_TEXT[p.action]}${target}.`, sub: `Waiting on ${who} to block or pass.` };
+      case 'lose':
+        return { text: `${n(this.lossQueue[0].id)} must lose an influence (${this.lossQueue[0].reason}).` };
+      case 'exchange':
+        return { text: `${n(p.actor)} is choosing cards to keep from the Exchange.` };
+      default:
+        throw new Error(`unknown phase ${this.phase}`);
+    }
+  }
+
+  textView(pid) {
+    const lines = [];
+    const me = this.players.find((p) => p.id === pid);
+    if (me) lines.push(`You are ${me.name}. Hand: ${this.hidden(me).length ? this.hidden(me).map((c) => cap(c.role)).join(', ') : '(none — you are out)'}. Coins: ${me.coins}.`);
+    lines.push('Players (turn order):');
+    for (const p of this.players) {
+      const turn = this.phase !== 'over' && p.id === this.current().id ? '>' : ' ';
+      const status = this.alive(p) ? `influence ${this.hidden(p).length}` : 'OUT';
+      const lost = p.cards.filter((c) => c.revealed).map((c) => cap(c.role)).join(', ') || '-';
+      lines.push(` ${turn} ${p.name.padEnd(14)} coins ${String(p.coins).padStart(2)}   ${status.padEnd(11)}  revealed: ${lost}${p.id === pid ? '  [you]' : ''}`);
+    }
+    lines.push(`Court deck: ${this.deck.length} cards.`);
+    if (this.phase === 'exchange' && this.ctx.actor === pid) lines.push(`Exchange: you drew ${this.ctx.drawn.map(cap).join(', ')}.`);
+    return lines;
   }
 
   // ---------- views ----------

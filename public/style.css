@@ -144,3 +144,54 @@ input {
 .settings label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
 .settings input { width: 110px; }
 pre.cmd { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- Hull Breach ---------- */
+:root { --crew: #1f5fa8; --sab: #b02a37; --nav: #6b3fa0; }
+.hb-board { grid-column: 1 / -1; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.track { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.mission { width: 58px; height: 58px; border-radius: 50%; border: 3px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+.mission .num { font-size: 20px; font-weight: 800; }
+.mission .two { font-size: 9px; color: var(--muted); line-height: 1; }
+.mission.now { border-color: var(--accent); }
+.mission.ok { background: var(--crew); border-color: var(--crew); color: #fff; }
+.mission.bad { background: var(--sab); border-color: var(--sab); color: #fff; }
+.mission.ok .two, .mission.bad .two { color: #fff; }
+.proposals { display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: 10px; font-size: 13px; }
+.proposals .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); }
+.proposals .dot.used { background: var(--muted); border-color: var(--muted); }
+.proposals .dot.cur { border-color: var(--accent); background: var(--accent); }
+button.seat.hb { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.seat.me-seat { border-style: dashed; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; min-height: 20px; }
+.badge2 { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); }
+.badge2.lead { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.badge2.team { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.badge2.know-bad, .badge2.side-sab { background: var(--sab); color: #fff; border-color: var(--sab); }
+.badge2.know-nav { background: var(--nav); color: #fff; border-color: var(--nav); }
+.badge2.side-crew { background: var(--crew); color: #fff; border-color: var(--crew); }
+.vote { display: inline-block; min-width: 20px; text-align: center; border-radius: 4px; font-weight: 800; }
+.vote.yes { color: var(--ok); }
+.vote.no { color: var(--danger); }
+.all-votes { grid-column: 1 / -1; justify-self: start; }
+.role-card { width: 120px; min-height: 130px; border-radius: 10px; color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px; text-align: center; }
+.role-card.side-crew { background: var(--crew); }
+.role-card.side-sab { background: var(--sab); }
+.role-card .rname { font-size: 20px; font-weight: 800; }
+.role-card .rside { font-size: 12px; opacity: .9; }
+.knows { margin: 6px 0; padding: 6px 8px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 4px; }
+button.danger-btn { background: var(--sab); color: #fff; border-color: var(--sab); font-weight: 600; }
+.ok-t { color: var(--ok); font-weight: 600; }
+.bad-t { color: var(--danger); font-weight: 600; }
+fieldset.roles { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+fieldset.roles legend { font-size: 12px; color: var(--muted); }
+label.check { flex-direction: row !important; align-items: center; gap: 4px; color: var(--ink) !important; font-size: 13px !important; }
+label.check input { width: auto; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 10; overflow-y: auto; }
+.modal-box { background: var(--panel); border-radius: 12px; padding: 16px; max-width: 760px; width: 100%; position: relative; border: 1px solid var(--line); }
+.modal-x { position: absolute; top: 12px; right: 12px; }
+.modal-box h3 { margin-top: 0; padding-right: 70px; }
+.grid-wrap { overflow-x: auto; }
+table.votegrid { border-collapse: collapse; font-size: 13px; width: 100%; }
+table.votegrid th, table.votegrid td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; white-space: nowrap; }
+table.votegrid td.oncrew { background: var(--bg); }
+.home .row button small { font-weight: 400; opacity: .8; }

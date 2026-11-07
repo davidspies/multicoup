@@ -2,7 +2,6 @@
 export const config = {
   host: '0.0.0.0',
   port: 10000, // Render's default PORT, so the host needs no port setting
-  maxSeats: 6,
   // Longest a single long-poll request is held open.
   longPollMaxSec: 30,
   // Rooms with no activity for this long are deleted.

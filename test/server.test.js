@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { createServer } from '../src/server.js';
 
 const run = promisify(execFile);
-const CLI = fileURLToPath(new URL('../cli/coup.mjs', import.meta.url));
+const CLI = fileURLToPath(new URL('../cli/multicoup.mjs', import.meta.url));
 let server, base;
 
 before(async () => {
@@ -32,7 +32,7 @@ async function call(method, path, body, token) {
 }
 
 test('full multi-game match over HTTP with random players', async () => {
-  const host = (await call('POST', '/api/rooms', { name: 'Ann' })).data;
+  const host = (await call('POST', '/api/rooms', { name: 'Ann', game: 'coup' })).data;
   const code = host.code;
   const seats = [host];
   for (const name of ['Bob', 'Cat', 'Dan']) seats.push((await call('POST', `/api/rooms/${code}/join`, { name })).data);
@@ -75,7 +75,7 @@ function assertPublic(view, seats) {
 }
 
 test('watch: spectator feed needs no token, long-polls, and hides private info', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
   let w = await call('GET', `/api/rooms/${a.code}/watch`);
   assert.equal(w.status, 200);
@@ -89,7 +89,7 @@ test('watch: spectator feed needs no token, long-polls, and hides private info',
 });
 
 test('long poll returns on change', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const v = (await call('GET', `/api/rooms/${a.code}/state`, undefined, a.token)).data.version;
   const pending = call('GET', `/api/rooms/${a.code}/state?since=${v}&wait=10`, undefined, a.token);
   await new Promise((r) => setTimeout(r, 100));
@@ -100,7 +100,7 @@ test('long poll returns on change', async () => {
 });
 
 test('response timeout auto-passes challenge windows', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
   await call('POST', `/api/rooms/${a.code}/settings`, { settings: { responseTimeoutSec: 1 } }, a.token);
   let st = (await call('POST', `/api/rooms/${a.code}/start`, {}, a.token)).data;
@@ -119,7 +119,7 @@ test('CLI: create, join, start, wait, act', async () => {
   const d2 = await mkdtemp(join(tmpdir(), 'coup-b-'));
   const cli = (dir, ...args) => run('node', [CLI, ...args], { cwd: dir }).then((r) => r.stdout);
   try {
-    const out = await cli(d1, 'create', base, 'Alpha');
+    const out = await cli(d1, 'create', base, 'coup', 'Alpha');
     const code = out.match(/room ([A-Z]{4})/)[1];
     await cli(d2, 'join', base, code, 'Beta');
     await cli(d1, 'start');
@@ -142,7 +142,7 @@ test('CLI: create, join, start, wait, act', async () => {
 });
 
 test('narrator: key only for host; pause and step mode gate players', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
   const R = `/api/rooms/${a.code}`;
   const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
@@ -180,7 +180,7 @@ test('narrator: key only for host; pause and step mode gate players', async () =
 });
 
 test('narrator: step mode stops the auto-pass timer while held', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
   const R = `/api/rooms/${a.code}`;
   const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
@@ -201,7 +201,7 @@ test('narrator: step mode stops the auto-pass timer while held', async () => {
 });
 
 test('reveal: private record only after the game, only for the narrator', async () => {
-  const a = (await call('POST', '/api/rooms', { name: 'A' })).data;
+  const a = (await call('POST', '/api/rooms', { name: 'A', game: 'coup' })).data;
   const b = (await call('POST', `/api/rooms/${a.code}/join`, { name: 'B' })).data;
   const R = `/api/rooms/${a.code}`;
   const key = (await call('GET', `${R}/state`, undefined, a.token)).data.narratorKey;
@@ -229,4 +229,71 @@ test('reveal: private record only after the game, only for the narrator', async 
   for (const e of rec.events) if (/claims/.test(e.text)) assert.match(e.note, /^(HONEST|BLUFF):/);
   assert.equal((await call('GET', `${R}/reveal?game=1`, undefined, a.token)).status, 200);
   assert.equal((await call('GET', `${R}/reveal?game=7`, undefined, key)).status, 404);
+});
+
+test('rooms need a known game', async () => {
+  assert.equal((await call('POST', '/api/rooms', { name: 'A' })).status, 400);
+  assert.equal((await call('POST', '/api/rooms', { name: 'A', game: 'chess' })).status, 400);
+});
+
+test('hull breach: full match over HTTP; roles stay private until the end', async () => {
+  const host = (await call('POST', '/api/rooms', { name: 'H0', game: 'hullbreach' })).data;
+  const R = `/api/rooms/${host.code}`;
+  const seats = [host];
+  for (let i = 1; i < 7; i++) seats.push((await call('POST', `${R}/join`, { name: `H${i}` })).data);
+  assert.equal((await call('POST', `${R}/options`, { options: { medic: true, mimic: true } }, host.token)).status, 200);
+  assert.equal((await call('POST', `${R}/options`, { options: { wizard: true } }, host.token)).status, 400);
+  for (let g = 1; g <= 2; g++) {
+    assert.equal((await call('POST', `${R}/start`, {}, host.token)).status, 200);
+    for (let guard = 0; ; guard++) {
+      assert.ok(guard < 500);
+      const views = await Promise.all(seats.map((s) => call('GET', `${R}/state`, undefined, s.token)));
+      const over = views[0].data.game.phase === 'over';
+      for (const v of views) {
+        const others = v.data.game.players.filter((p) => p.id !== v.data.you);
+        if (!over) assert.ok(others.every((p) => p.role === null), 'role leaked');
+        assert.ok(v.data.text.some((l) => l.startsWith('You are')));
+      }
+      if (over) break;
+      const i = views.findIndex((v) => v.data.legal.length);
+      const legal = views[i].data.legal;
+      let move;
+      if (legal[0].type === 'propose') move = { type: 'propose', team: legal[0].choices.slice(0, legal[0].size) };
+      else {
+        const { label, ...m } = legal[legal[0].type === 'vote' ? 0 : Math.floor(Math.random() * legal.length)];
+        move = m;
+      }
+      const r = await call('POST', `${R}/act`, { move }, seats[i].token);
+      assert.equal(r.status, 200, JSON.stringify(r.data));
+    }
+  }
+  const st = (await call('GET', `${R}/watch`)).data;
+  assert.equal(st.results.length, 2);
+  assert.ok(st.results.every((r) => r.winners.length === 4 || r.winners.length === 3));
+  const key = (await call('GET', `${R}/state`, undefined, host.token)).data.narratorKey;
+  const rec = (await call('GET', `${R}/reveal`, undefined, key)).data;
+  assert.equal(rec.roles.length, 7);
+});
+
+test('CLI: hull breach captain proposes by name', async () => {
+  const dirs = [];
+  const cli = (dir, ...args) => run('node', [CLI, ...args], { cwd: dir }).then((r) => r.stdout);
+  try {
+    for (let i = 0; i < 5; i++) dirs.push(await mkdtemp(join(tmpdir(), `hb-${i}-`)));
+    const code = (await cli(dirs[0], 'create', base, 'hullbreach', 'Ann')).match(/room ([A-Z]{4})/)[1];
+    const names = ['Ann', 'Ben', 'Cy', 'Dee', 'Eve'];
+    for (let i = 1; i < 5; i++) await cli(dirs[i], 'join', base, code, names[i]);
+    await cli(dirs[0], 'start');
+    const outs = await Promise.all(dirs.map((d) => cli(d, 'wait', '2')));
+    const c = outs.findIndex((o) => o.includes('you are captain'));
+    assert.ok(c >= 0, outs.join('\n----\n'));
+    assert.match(outs[c], /propose <name1> <name2>/);
+    for (const o of outs) assert.match(o, /You are \w+, the \w+/);
+    const after = await cli(dirs[c], 'propose', 'Ann', 'Ben');
+    assert.match(after, /proposes Ann, Ben for mission 1/);
+    const v = await cli(dirs[(c + 1) % 5], 'wait', '2');
+    assert.match(v, /\d+\. Approve the proposed crew/);
+  } finally {
+    for (const d of dirs) await rm(d, { recursive: true });
+  }
 });

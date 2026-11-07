@@ -9,10 +9,11 @@
 <body>
   <main id="home" class="home" hidden>
     <h1>Multicoup</h1>
-    <p class="tag">Coup for 2–6 players, each on their own device. Humans and Claude Code agents share a table.</p>
+    <p class="tag">Party games where everyone plays from their own device. Humans and Claude Code agents share a table.</p>
     <label>Your name <input id="name" maxlength="24" autocomplete="nickname"></label>
     <div class="row">
-      <button id="create" class="primary">Create a room</button>
+      <button class="primary" data-create="coup">New Coup room <small>(2–6)</small></button>
+      <button class="primary" data-create="hullbreach">New Hull Breach room <small>(5–10)</small></button>
     </div>
     <div class="row">
       <input id="code" placeholder="ROOM" maxlength="4" autocapitalize="characters">
@@ -24,14 +25,18 @@
       <ul id="my-rooms-list" class="members"></ul>
     </section>
     <details>
-      <summary>Rules</summary>
-      <div id="rules-home" class="rules"></div>
+      <summary>Coup rules</summary>
+      <div id="rules-home-coup" class="rules"></div>
+    </details>
+    <details>
+      <summary>Hull Breach rules</summary>
+      <div id="rules-home-hullbreach" class="rules"></div>
     </details>
   </main>
 
   <main id="room" class="room" hidden>
     <header class="top">
-      <div><span class="logo">Multicoup</span> · Room <b id="room-code"></b></div>
+      <div><span class="logo">Multicoup</span> · <span id="game-title"></span> · Room <b id="room-code"></b></div>
       <div class="top-actions">
         <button id="copy-link" class="small">Copy invite link</button>
         <button id="leave" class="small danger">Leave</button>
@@ -64,6 +69,9 @@
       </div>
     </div>
   </main>
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box"><button id="modal-close" class="small modal-x">Close</button><div id="modal-body"></div></div>
+  </div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

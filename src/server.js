@@ -17,8 +17,9 @@ const TYPES = {
 };
 // Files served at fixed paths outside public/ so agents can download them.
 const EXTRA_FILES = {
-  '/coup.mjs': join(ROOT, 'cli', 'coup.mjs'),
-  '/RULES.md': join(ROOT, 'RULES.md'),
+  '/multicoup.mjs': join(ROOT, 'cli', 'multicoup.mjs'),
+  '/rules/coup.md': join(ROOT, 'rules', 'coup.md'),
+  '/rules/hullbreach.md': join(ROOT, 'rules', 'hullbreach.md'),
   '/PLAYING_AS_CLAUDE.md': join(ROOT, 'PLAYING_AS_CLAUDE.md'),
   '/WATCHING_AS_CLAUDE.md': join(ROOT, 'WATCHING_AS_CLAUDE.md'),
 };
@@ -84,7 +85,7 @@ async function route(lobby, req, res) {
 
   if (req.method === 'POST' && parts.length === 2 && parts[1] === 'rooms') {
     const body = await readJson(req);
-    const room = lobby.create();
+    const room = lobby.create(body.game);
     const m = room.join(body.name);
     return send(res, 200, { code: room.code, playerId: m.id, token: m.token });
   }
@@ -144,6 +145,9 @@ async function route(lobby, req, res) {
     case 'settings':
       room.updateSettings(me.id, body.settings);
       break;
+    case 'options':
+      room.updateOptions(me.id, body.options);
+      break;
     case 'leave':
       room.leave(me.id);
       return send(res, 200, { ok: true });
@@ -186,6 +190,6 @@ async function serveStatic(pathname, res) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   createServer().listen(config.port, config.host, () => {
-    console.log(`Coup server listening on http://${config.host}:${config.port}`);
+    console.log(`Multicoup server listening on http://${config.host}:${config.port}`);
   });
 }

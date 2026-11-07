@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, IllegalMove } from '../src/game.js';
+import { Game, IllegalMove } from '../src/games/coup.js';
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -12,7 +12,7 @@ function seeded(seed) {
 
 function newGame(n, seed = 1) {
   const players = Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: `P${i + 1}` }));
-  return new Game(players, { rng: seeded(seed), startIndex: 0 });
+  return new Game(players, { rng: seeded(seed), startIndex: 0, options: {} });
 }
 
 // Force a player's hidden hand (swapping cards with the deck to keep counts valid).
