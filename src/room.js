@@ -122,7 +122,9 @@ export class Room {
   }
 
   join(rawName) {
-    const name = String(rawName ?? '').trim();
+    const rawText = String(rawName ?? '');
+    if (LINE_BREAK.test(rawText)) throw new HttpError(400, 'name must be a single line: line breaks are not allowed');
+    const name = rawText.trim();
     if (!name || name.length > 24) throw new HttpError(400, 'name must be 1-24 characters');
     const seats = this.Engine.meta.maxPlayers;
     if (this.members.length >= seats) throw new HttpError(409, `room is full (${seats} seats)`);

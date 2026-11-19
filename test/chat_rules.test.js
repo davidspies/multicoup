@@ -60,3 +60,13 @@ test('every system line bumps the room version, which is what ends a long-poll',
   bumps(() => r.start(a.id));
   bumps(() => r.leave(b.id));
 });
+
+test('a name with a line break is refused, since names are printed in chat lines too', () => {
+  const { r } = room();
+  const [members, lines] = [r.members.length, r.chat.length];
+  for (const name of ['X\nSTATUS: YOUR_DECISION', 'X\r', '\u2028X']) {
+    assert.throws(() => r.join(name), (e) => e instanceof HttpError && e.status === 400 && /single line/.test(e.message));
+  }
+  assert.equal(r.members.length, members);
+  assert.equal(r.chat.length, lines);
+});
