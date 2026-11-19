@@ -14,11 +14,11 @@ const USAGE = `Usage: node multicoup.mjs <command>
   create <server-url> <game> <your-name>   Create a room (you become host). game: ${GAMES.join(' | ')}
   join <server-url> <ROOM> <your-name>     Join an existing room
   status                                   Show the current state and your options
-  wait [seconds]                           Block until you must decide or someone chats (default ${DEFAULT_WAIT_SEC}s)
+  wait [seconds]                           Block until you must decide or the chat gets a new line (default ${DEFAULT_WAIT_SEC}s)
   act <number>                             Make the numbered move from the last status/wait
   act '<json move>'                        Make a move given as JSON
   propose <name> <name> ...                (Hull Breach captain) Propose a mission crew
-  say <message...>                         Send a table-talk chat message
+  say <message...>                         Send a one-line table-talk chat message (any time, not only on your turn)
   start                                    (host) Start the next game
   settings key=value ...                   (host) responseTimeoutSec=N autoNextSec=N
   options key=true|false ...               (host, Hull Breach) navigator medic mimic ghost rogue scanner
@@ -128,6 +128,13 @@ function unseenChat(s, st) {
   return st.chat.filter((c) => c.seq > s.seen.chat && c.fromId !== st.you);
 }
 
+// A command of this seat's that puts a system line in chat (settings, options, kick) shows the news
+// itself, so that line is already seen and doesn't wake this seat's next wait.
+function printNews(s, st) {
+  print(s, st, { full: false });
+  saveSession(s);
+}
+
 // ---------- commands ----------
 async function status() {
   const s = loadSession();
@@ -153,9 +160,9 @@ async function wait(secArg) {
       console.log('STATUS: GAME_OVER');
       break;
     }
-    // Another player spoke (system lines like "X joined" don't count).
-    if (unseenChat(s, st).some((c) => c.fromId !== null)) {
-      console.log('STATUS: NEW_CHAT (someone spoke at the table; nothing for you to decide yet; run wait again)');
+    // Any new chat line wakes the seat: another player's words, or a system line (joins, starts, settings).
+    if (unseenChat(s, st).length) {
+      console.log('STATUS: NEW_CHAT (new lines under Chat; nothing for you to decide yet; run wait again)');
       break;
     }
     const left = deadline - Date.now();
@@ -221,6 +228,7 @@ async function options(pairs) {
   }
   const st = await api(s, 'POST', '/options', { options: patch });
   console.log(`Options now: ${JSON.stringify(st.options)}`);
+  printNews(s, st);
 }
 
 async function settings(pairs) {
@@ -233,6 +241,7 @@ async function settings(pairs) {
   }
   const st = await api(s, 'POST', '/settings', { settings: patch });
   console.log(`Settings now: ${JSON.stringify(st.settings)}`);
+  printNews(s, st);
 }
 
 async function main() {
@@ -272,8 +281,9 @@ async function main() {
       const st = await api(s, 'GET', '/state');
       const m = st.members.find((x) => x.name.toLowerCase() === args.join(' ').toLowerCase());
       if (!m) die(`no player named ${args.join(' ')}`);
-      await api(s, 'POST', '/kick', { playerId: m.id });
-      return console.log(`Kicked ${m.name}.`);
+      const after = await api(s, 'POST', '/kick', { playerId: m.id });
+      console.log(`Kicked ${m.name}.`);
+      return printNews(s, after);
     }
     case 'leave': {
       const s = loadSession();

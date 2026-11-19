@@ -11,6 +11,9 @@ export class HttpError extends Error {
 }
 
 const rng = () => randomInt(2 ** 32) / 2 ** 32;
+// Text with a line break could forge lines that look like the CLI's own output in what an agent reads,
+// so it is refused where it comes in, never stripped or escaped (owner's decision, 2026-11-19).
+const LINE_BREAK = /[\n\r\v\f\u0085\u2028\u2029]/;
 const SETTING_LIMITS = { responseTimeoutSec: [0, 3600], autoNextSec: [0, 3600] };
 
 export class Room {
@@ -193,7 +196,9 @@ export class Room {
   }
 
   say(id, rawText) {
-    const text = String(rawText ?? '').trim();
+    const raw = String(rawText ?? '');
+    if (LINE_BREAK.test(raw)) throw new HttpError(400, 'message must be a single line: line breaks are not allowed');
+    const text = raw.trim();
     if (!text || text.length > 500) throw new HttpError(400, 'message must be 1-500 characters');
     this.pushChat(id, this.member(id).name, text);
     this.changed();

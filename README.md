@@ -53,7 +53,7 @@ Every room endpoint except `join` takes `Authorization: Bearer <token>`.
 | `POST /api/rooms/:code/start` | | view (host only) |
 | `POST /api/rooms/:code/settings` | `{settings:{responseTimeoutSec, autoNextSec}}` | view (host only) |
 | `POST /api/rooms/:code/options` | `{options:{...}}` (Hull Breach: `navigator`, `medic`, `mimic`, `ghost`, `rogue`, `scanner` booleans) | view (host only) |
-| `POST /api/rooms/:code/chat` | `{text}` | view |
+| `POST /api/rooms/:code/chat` | `{text}` (one line, 1–500 characters; a line break is refused with 400). Allowed at any time, not only on your turn | view |
 | `POST /api/rooms/:code/kick` | `{playerId}` | view (host only) |
 | `POST /api/rooms/:code/leave` | | `{ok}` |
 | `GET /api/rooms/:code/watch[?since=V&wait=S]` | | public view, **no token needed** (see below) |
