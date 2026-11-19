@@ -195,16 +195,16 @@ export class Room {
   say(id, rawText) {
     const text = String(rawText ?? '').trim();
     if (!text || text.length > 500) throw new HttpError(400, 'message must be 1-500 characters');
-    this.pushChat(this.member(id).name, text);
+    this.pushChat(id, this.member(id).name, text);
     this.changed();
   }
 
   system(text) {
-    this.pushChat(null, text);
+    this.pushChat(null, null, text);
   }
 
-  pushChat(from, text) {
-    this.chat.push({ seq: ++this.chatSeq, from, text, at: Date.now() });
+  pushChat(fromId, from, text) {
+    this.chat.push({ seq: ++this.chatSeq, fromId, from, text, at: Date.now() });
     if (this.chat.length > config.chatHistory) this.chat.shift();
   }
 

@@ -14,7 +14,7 @@ const USAGE = `Usage: node multicoup.mjs <command>
   create <server-url> <game> <your-name>   Create a room (you become host). game: ${GAMES.join(' | ')}
   join <server-url> <ROOM> <your-name>     Join an existing room
   status                                   Show the current state and your options
-  wait [seconds]                           Block until you must decide (default ${DEFAULT_WAIT_SEC}s)
+  wait [seconds]                           Block until you must decide or someone chats (default ${DEFAULT_WAIT_SEC}s)
   act <number>                             Make the numbered move from the last status/wait
   act '<json move>'                        Make a move given as JSON
   propose <name> <name> ...                (Hull Breach captain) Propose a mission crew
@@ -92,8 +92,7 @@ function print(s, st, { full }) {
     }
     s.seen.log = { [key]: g.log.length };
   }
-  const chatSeen = full ? (st.chat.at(-10)?.seq ?? 1) - 1 : (s.seen.chat ?? 0);
-  const chat = st.chat.filter((c) => c.seq > chatSeen);
+  const chat = full ? st.chat.slice(-10) : unseenChat(s, st);
   if (chat.length) {
     lines.push('Chat:');
     chat.forEach((c) => lines.push(c.from ? `  [${c.from}] ${c.text}` : `  * ${c.text}`));
@@ -123,6 +122,12 @@ function print(s, st, { full }) {
 
 const stripLabel = ({ label, ...m }) => m;
 
+// Chat lines this seat hasn't been shown yet. What it said itself isn't news to it.
+function unseenChat(s, st) {
+  if (!Number.isInteger(s.seen.chat)) throw new Error(`${SESSION_FILE} has no chat position`);
+  return st.chat.filter((c) => c.seq > s.seen.chat && c.fromId !== st.you);
+}
+
 // ---------- commands ----------
 async function status() {
   const s = loadSession();
@@ -146,6 +151,11 @@ async function wait(secArg) {
     if (over && s.seen.over !== st.gameNumber) {
       s.seen.over = st.gameNumber;
       console.log('STATUS: GAME_OVER');
+      break;
+    }
+    // Another player spoke (system lines like "X joined" don't count).
+    if (unseenChat(s, st).some((c) => c.fromId !== null)) {
+      console.log('STATUS: NEW_CHAT (someone spoke at the table; nothing for you to decide yet; run wait again)');
       break;
     }
     const left = deadline - Date.now();
